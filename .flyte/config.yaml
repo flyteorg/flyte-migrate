@@ -1,0 +1,20 @@
+admin:
+  # endpoint: dns:///localhost:8090
+  # endpoint: dns:///demo.hosted.unionai.cloud
+  # endpoint: dns:///playground.canary.unionai.cloud
+  endpoint: dns:///dogfood-gcp.cloud-staging.union.ai
+  # endpoint: dns:///dogfood.cloud-staging.union.ai
+  # endpoint: dns:///serving-mvp.us-west-2.union.ai
+  # endpoint: dns:///dragonfly.eu-central-1.unionai.cloud
+  # endpoint: dns:///tryv2.hosted.unionai.cloud
+  authType: Pkce
+  insecure: False
+logger:
+  show-source: true
+  level: 0
+task:
+  # org: playground
+  project: flytesnacks
+  domain: development
+image:
+  builder: remote
