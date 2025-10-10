@@ -1,9 +1,9 @@
 import logging
-import flyte_migrate  # TODO: Add it to entrypoint
+import flyte_migrate  # noqa: Add it to entrypoint
 from flytekit import ImageSpec, dynamic, task, workflow
 
 
-image = ImageSpec(apt_packages=["git"], packages=["pandas"])
+image = ImageSpec(apt_packages=["git"], packages=["pandas", "mypy", "ty"])
 
 
 @task(cache=True, cache_version="1.0", retries=3, container_image=image)
@@ -25,7 +25,7 @@ def wf(name: str):
 if __name__ == "__main__":
     """
     uv pip install -e .  # flyte-migrate
-    uv pip install --pre flyte==2.0.0b22
+    uv pip install --pre flyte
     python examples/hello.py
     """
     import flyte

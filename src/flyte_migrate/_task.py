@@ -4,19 +4,23 @@ from typing import Callable, Dict, Iterable, List, Literal, Optional, Tuple, Uni
 
 
 import flyte
-from flyte import Image, Resources, TaskEnvironment
 from flyte._doc import Documentation
 from flyte._task import AsyncFunctionTaskTemplate, P, R
+from flytekit import Cache, Resources, Secret, ImageSpec, Documentation, PodTemplate
+from flytekit.core.base_task import T, TaskResolverMixin
+from flytekit.core.python_function_task import PythonFunctionTask
+from flytekit.core.task import FuncOut
+from flytekit.deck import DeckField
+from flytekit.extras.accelerators import BaseAccelerator
 
 import flytekit
 
-if TYPE_CHECKING:
-    from flytekit import Cache, Resources, Secret, ImageSpec, Documentation, PodTemplate
-    from flytekit.core.base_task import T, TaskResolverMixin
-    from flytekit.core.python_function_task import PythonFunctionTask
-    from flytekit.core.task import FuncOut
-    from flytekit.deck import DeckField
-    from flytekit.extras.accelerators import BaseAccelerator
+from flyte_migrate._image import _transform_image_spec_v1_to_v2
+from flyte_migrate._workflow import parent_env
+
+
+# Map a v1 task to one of the v2 env
+_task_to_env: Dict[str, flyte.TaskEnvironment] = {}
 
 
 def task_shim(
@@ -57,43 +61,24 @@ def task_shim(
         else None
     )
 
-    if isinstance(container_image, flytekit.ImageSpec):
-        image = Image.from_debian_base()
-        if container_image.apt_packages:
-            image = image.with_apt_packages(*container_image.apt_packages)
-        pip_packages = ["flytekit"]
-        if container_image.packages:
-            pip_packages.extend(container_image.packages)
-        image = (
-            image.with_pip_packages(*pip_packages)
-            .with_source_folder(Path(__file__).parent.parent.parent, "./flyte-migrate")
-            .with_env_vars({"PYTHONPATH": "./flyte-migrate/src:${PYTHONPATH}"})
-        )
-    elif isinstance(container_image, str):
-        image = (
-            Image.from_base(container_image)
-            .with_pip_packages("flyte")
-            .with_source_folder(Path(__file__).parent.parent.parent, "./flyte-migrate")
-            .with_env_vars({"PYTHONPATH": "./flyte-migrate/src:${PYTHONPATH}"})
-        )
+    docs = Documentation(description=docs.description) if docs else None
+    v2_image = _transform_image_spec_v1_to_v2(container_image)
+
+    if v2_image.uri in _task_to_env:
+        # TODO: Key should be a hash of the task
+        v2_task = _task_to_env[v2_image.uri].task
     else:
-        image = (
-            Image.from_debian_base()
-            .with_pip_packages("flytekit")
-            .with_source_folder(Path(__file__).parent.parent.parent, "./flyte-migrate")
-            .with_env_vars({"PYTHONPATH": "./flyte-migrate/src:${PYTHONPATH}"})
+        env = flyte.TaskEnvironment(
+            name="flyte-task_" + v2_image._final_tag,
+            resources=flyte.Resources(cpu=0.8, memory="800Mi"),
+            image=v2_image,
+            cache="auto" if cache else "disable",
+            plugin_config=plugin_config,
         )
-
-    docs = Documentation(description=docs.short_description) if docs else None
-
-    env = TaskEnvironment(
-        name="flytekit_task",
-        resources=Resources(cpu=0.8, memory="800Mi"),
-        image=image,
-        cache="auto" if cache else "disable",
-        plugin_config=plugin_config,
-    )
-    return env.task(retries=retries, pod_template=pod_template_name or pod_template, docs=docs)
+        parent_env.depends_on.append(env)
+        _task_to_env[v2_image.uri] = env
+        v2_task = env.task
+    return v2_task(retries=retries, pod_template=pod_template_name or pod_template, docs=docs)
 
 
 flytekit.task = task_shim
