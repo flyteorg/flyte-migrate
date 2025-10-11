@@ -1,5 +1,6 @@
+import flyte_migrate  # noqa: F401, I001
 import logging
-import flyte_migrate  # noqa: Add it to entrypoint
+
 from flytekit import ImageSpec, dynamic, task, workflow
 
 
@@ -25,12 +26,12 @@ def wf(name: str):
 if __name__ == "__main__":
     """
     uv pip install -e .  # flyte-migrate
-    uv pip install --pre flyte
+    uv pip install -e .  # flyte-sdk
     python examples/hello.py
     """
     import flyte
 
     flyte.init_from_config(log_level=logging.DEBUG)
-    run = flyte.with_runcontext(log_level=logging.DEBUG).run(wf, name="flyte")
+    run = flyte.with_runcontext(mode="remote", log_level=logging.DEBUG).run(wf, name="flyte")
     print(run.name)
     print(run.url)

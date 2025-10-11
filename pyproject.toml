@@ -5,13 +5,33 @@ description = "migrate v1 workflows to v2"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "flyte==2.0.0b22",
+    "flyte",
     "flytekit"
 ]
 
 [build-system]
 requires = ["setuptools", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "build>=1.2.2.post1",
+    "mock>=5.2.0",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-benchmark>=5.1.0",
+    "ruff>=0.11.0",
+    "setuptools-scm>=8.2.0",
+    "google-cloud-bigquery>=3.31.0",
+    "pandas",
+    "pyarrow",
+    "orjson",
+    "docstring_parser",
+    "jupyterlab>=4.4.3",
+    "ipywidgets>=8.1.7",
+    "mypy>=1.16.0",
+    "kubernetes",
+]
 
 [tool.setuptools]
 include-package-data = true

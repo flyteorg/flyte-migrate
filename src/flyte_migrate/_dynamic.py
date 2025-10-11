@@ -1,8 +1,7 @@
 from typing import Callable, Union
 
-from flyte._task import AsyncFunctionTaskTemplate, P, R
-
 import flytekit
+from flyte._task import AsyncFunctionTaskTemplate, P, R
 
 import flyte_migrate
 
