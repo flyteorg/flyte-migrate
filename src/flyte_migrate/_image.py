@@ -10,6 +10,7 @@ from flyte_migrate._workflow import parent_env
 
 _package_v1_to_v2: Dict[str, str] = {
     "flytekitplugins-spark": "flyteplugins-spark",
+    "flytekitplugins-ray": "flyteplugins-ray",
 }
 
 
