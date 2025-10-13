@@ -19,17 +19,11 @@ def f(x):
         worker_node_config=[
             WorkerNodeConfig(
                 group_name="test-group",
-                requests=Resources(mem="1Gi"),
-                limits=Resources(mem="1Gi"),
                 replicas=2,
             )
         ],
-        head_node_config=HeadNodeConfig(
-            requests=Resources(mem="1Gi"),
-            limits=Resources(mem="1Gi"),
-        ),
     ),
-    limits=Resources(mem="4Gi"),
+    limits=Resources(mem="2Gi"),
     container_image=custom_image,
 )
 def ray_task() -> typing.List[int]:
