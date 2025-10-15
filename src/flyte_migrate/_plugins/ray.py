@@ -39,9 +39,6 @@ def _transform_ray_config_v1_to_v2(v1_config: Optional[Any]) -> Optional[Any]:
             limits=_transform_resource_v1_to_v2(v1_config.head_node_config.limits),
         )
 
-    print("worker: ", v2_worker_node_configs, flush=True)
-    print("head: ", v2_head_node_config, flush=True)
-
     return v2RayConfig(
         worker_node_config=v2_worker_node_configs,
         head_node_config=v2_head_node_config,
