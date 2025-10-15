@@ -1,6 +1,7 @@
 from typing import Any, Optional
 
 from flyte_migrate._pod_template import _transform_pod_template_v1_to_v2
+from flyte_migrate._resource import _transform_resource_v1_to_v2
 
 
 def _transform_ray_config_v1_to_v2(v1_config: Optional[Any]) -> Optional[Any]:
@@ -23,8 +24,8 @@ def _transform_ray_config_v1_to_v2(v1_config: Optional[Any]) -> Optional[Any]:
             max_replicas=v1_worker_node_config.max_replicas,
             ray_start_params=v1_worker_node_config.ray_start_params,
             pod_template=_transform_pod_template_v1_to_v2(v1_worker_node_config.pod_template),
-            requests=v1_worker_node_config.requests,
-            limits=v1_worker_node_config.limits,
+            requests=_transform_resource_v1_to_v2(resources=v1_worker_node_config.requests),
+            limits=_transform_resource_v1_to_v2(resources=v1_worker_node_config.limits),
         )
         for v1_worker_node_config in v1_config.worker_node_config
     ]
@@ -34,8 +35,8 @@ def _transform_ray_config_v1_to_v2(v1_config: Optional[Any]) -> Optional[Any]:
         v2_head_node_config = v2HeadNodeConfig(
             ray_start_params=v1_config.head_node_config.ray_start_params,
             pod_template=_transform_pod_template_v1_to_v2(v1_config.head_node_config.pod_template),
-            requests=v1_config.head_node_config.requests,
-            limits=v1_config.head_node_config.limits,
+            requests=_transform_resource_v1_to_v2(v1_config.head_node_config.requests),
+            limits=_transform_resource_v1_to_v2(v1_config.head_node_config.limits),
         )
 
     return v2RayConfig(
