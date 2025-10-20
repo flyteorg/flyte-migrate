@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Union, TypeVar
+from typing import Literal, Optional, TypeVar, Union
 
 import flyte
 import flytekit
