@@ -4,7 +4,7 @@ import typing
 
 import ray
 from flytekit import task, workflow, ImageSpec, Resources
-from flytekitplugins.ray import HeadNodeConfig, RayJobConfig, WorkerNodeConfig
+from flytekitplugins.ray import RayJobConfig, WorkerNodeConfig
 
 custom_image = ImageSpec(python_version="3.10", packages=["flytekitplugins-ray"])
 
