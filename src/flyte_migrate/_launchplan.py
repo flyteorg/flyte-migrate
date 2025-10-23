@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import flytekit
 
+from ._workflow import parent_env
 import flyte
 from flyte import Image, Resources, TaskEnvironment, Trigger, Cron, FixedRate
 from flytekit.core import workflow as _annotated_workflow
@@ -48,20 +49,55 @@ def schedule_to_trigger(
 
 class launchPlan_transformer(object):
     @classmethod
+    def create(
+        cls,
+        name: str,
+        workflow: _annotated_workflow.WorkflowBase,
+        default_inputs: Optional[Dict[str, Any]] = None,
+        fixed_inputs: Optional[Dict[str, Any]] = None,
+        schedule: Optional[_schedule_model.Schedule] = None,
+        notifications: Optional[List[_common_models.Notification]] = None,
+        labels: Optional[_common_models.Labels] = None,
+        annotations: Optional[_common_models.Annotations] = None,
+        raw_output_data_config: Optional[_common_models.RawOutputDataConfig] = None,
+        max_parallelism: Optional[int] = None,
+        security_context: Optional[security.SecurityContext] = None,
+        auth_role: Optional[_common_models.AuthRole] = None,
+        trigger: Optional[LaunchPlanTriggerBase] = None,
+        overwrite_cache: Optional[bool] = None,
+        auto_activate: bool = False,
+        concurrency: Optional[ConcurrencyPolicy] = None,
+    ) -> TaskEnvironment:
+        task_name = parent_env.name + '.' + workflow.func.__name__
+        trigger = schedule_to_trigger(schedule)
+        if task_name in parent_env._tasks.keys():
+            parent_env._tasks[task_name].triggers=(trigger,)
+        return parent_env
+
+    @classmethod
     def get_or_create(
         cls,
-        workflow,
+        workflow: _annotated_workflow.WorkflowBase,
         name: Optional[str] = None,
         default_inputs: Optional[Dict[str, Any]] = None,
         fixed_inputs: Optional[Dict[str, Any]] = None,
         schedule: Optional[_schedule_model.Schedule] = None,
+        notifications: Optional[List[_common_models.Notification]] = None,
         labels: Optional[_common_models.Labels] = None,
         annotations: Optional[_common_models.Annotations] = None,
+        raw_output_data_config: Optional[_common_models.RawOutputDataConfig] = None,
+        max_parallelism: Optional[int] = None,
+        security_context: Optional[security.SecurityContext] = None,
+        auth_role: Optional[_common_models.AuthRole] = None,
+        trigger: Optional[LaunchPlanTriggerBase] = None,
         overwrite_cache: Optional[bool] = None,
         auto_activate: bool = False,
+        concurrency: Optional[ConcurrencyPolicy] = None,
     ) -> TaskEnvironment:
-        trigger = Schedule_to_trigger(schedule)
-        workflow.triggers = (trigger,)
-        return workflow
+        task_name = parent_env.name + '.' + workflow.func.__name__
+        trigger = schedule_to_trigger(schedule)
+        if task_name in parent_env._tasks.keys():
+            parent_env._tasks[task_name].triggers=(trigger,)
+        return parent_env
 
 flytekit.LaunchPlan = launchPlan_transformer
