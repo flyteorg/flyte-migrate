@@ -4,9 +4,9 @@ import typing
 
 import ray
 from flytekit import task, workflow, ImageSpec, Resources
-from flytekitplugins.ray import RayJobConfig, WorkerNodeConfig
+from flytekitplugins.ray import RayJobConfig, WorkerNodeConfig, HeadNodeConfig
 
-custom_image = ImageSpec(python_version="3.10", packages=["flytekitplugins-ray"])
+custom_image = ImageSpec(python_version="3.10", packages=["flytekitplugins-ray", "kubernetes"], apt_packages=["wget"])
 
 
 @ray.remote
@@ -16,6 +16,7 @@ def f(x):
 
 @task(
     task_config=RayJobConfig(
+        head_node_config=HeadNodeConfig(ray_start_params={"log-color": "True"}),
         worker_node_config=[
             WorkerNodeConfig(
                 group_name="test-group",
@@ -23,7 +24,7 @@ def f(x):
             )
         ],
     ),
-    limits=Resources(mem="2Gi"),
+    limits=Resources(cpu="2", mem="2Gi"),
     container_image=custom_image,
 )
 def ray_task() -> typing.List[int]:
