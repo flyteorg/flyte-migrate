@@ -25,6 +25,7 @@ lp = LaunchPlan.get_or_create(
     name="v2_fixed_rate_trigger",
     default_inputs={"name": "flyte"},
     schedule=FixedRate(duration=timedelta(minutes=10)),
+    auto_activate=True,
 )
 
 
@@ -33,6 +34,7 @@ lp = LaunchPlan.get_or_create(
     name="v2_cron_schedule_trigger",
     default_inputs={"name": "flyte"},
     schedule=CronSchedule(schedule="*/10 * * * *"),
+    auto_activate=True,
 )
 
 if __name__ == "__main__":
