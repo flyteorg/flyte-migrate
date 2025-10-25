@@ -36,13 +36,6 @@ env = LaunchPlan.get_or_create(
 )
 
 if __name__ == "__main__":
-    """
-    uv pip install -e .  # flyte-migrate
-    uv pip install -e .  # flyte-sdk
-    uv pip install -e .  # flytekit
-    uv pip install -e .  # flyteidl2
-    python examples/hello_lp.py
-    """
     import flyte
 
     flyte.init_from_config(log_level=logging.DEBUG)
