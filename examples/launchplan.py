@@ -18,7 +18,7 @@ def wf(name: str):
     dynamic_task(name=name)
 
 
-env = LaunchPlan.get_or_create(
+lp = LaunchPlan.get_or_create(
     workflow=wf,
     name="v2_fixed_rate_trigger",
     default_inputs={"name": "flyte"},
@@ -26,7 +26,7 @@ env = LaunchPlan.get_or_create(
 )
 
 
-env = LaunchPlan.get_or_create(
+lp = LaunchPlan.get_or_create(
     workflow=wf,
     name="v2_cron_schedule_trigger",
     default_inputs={"name": "flyte"},
