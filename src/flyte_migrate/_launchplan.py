@@ -30,13 +30,15 @@ def schedule_to_trigger(
     schedule: Optional[_schedule_model.Schedule] = None,
     default_inputs: Optional[Dict[str, Any]] = None,
     fixed_inputs: Optional[Dict[str, Any]] = None,
-    overwrite_cache: bool = False,
+    overwrite_cache: Optional[bool] = None,
+    auto_activate: bool = False,
     labels: Optional[_common_models.Labels] = None,
     annotations: Optional[_common_models.Annotations] = None,
 ) -> Optional[Trigger]:
     if schedule is None:
         return None
-
+    if overwrite_cache is None:
+        overwrite_cache = False
     labels = {k: v for k, v in labels.values.items()} if labels else None
     annotations = {k: v for k, v in annotations.values.items()} if annotations else None
     inputs = merge_inputs(default_inputs, fixed_inputs)
@@ -55,10 +57,12 @@ def schedule_to_trigger(
             automation=automation,
             inputs=inputs,
             overwrite_cache=overwrite_cache,
+            auto_activate=auto_activate,
             labels=labels,
             annotations=annotations,
         )
     return None
+
 
 class launchPlan_transformer(object):
     @classmethod
@@ -85,13 +89,20 @@ class launchPlan_transformer(object):
         if kwargs:
             logger.debug(f"Unsupported args {kwargs.values()}")
         task_name = parent_env.name + "." + workflow.func.__name__
-        trigger = schedule_to_trigger(name, schedule, default_inputs, fixed_inputs)
+        trigger = schedule_to_trigger(
+            name=name,
+            schedule=schedule,
+            default_inputs=default_inputs,
+            fixed_inputs=fixed_inputs,
+            overwrite_cache=overwrite_cache,
+            auto_activate=auto_activate,
+        )
         if task_name in parent_env._tasks.keys():
             triggers = parent_env._tasks[task_name].triggers
             if triggers is None:
-                triggers = (trigger, )
+                triggers = (trigger,)
             else:
-                triggers += (trigger, )
+                triggers += (trigger,)
             parent_env._tasks[task_name].triggers = triggers
         return parent_env
 
@@ -119,13 +130,20 @@ class launchPlan_transformer(object):
         if kwargs:
             logger.debug(f"Unsupported args {kwargs.values()}")
         task_name = parent_env.name + "." + workflow.func.__name__
-        trigger = schedule_to_trigger(name, schedule, default_inputs, fixed_inputs)
+        trigger = schedule_to_trigger(
+            name=name,
+            schedule=schedule,
+            default_inputs=default_inputs,
+            fixed_inputs=fixed_inputs,
+            overwrite_cache=overwrite_cache,
+            auto_activate=auto_activate,
+        )
         if task_name in parent_env._tasks.keys():
             triggers = parent_env._tasks[task_name].triggers
             if triggers is None:
-                triggers = (trigger, )
+                triggers = (trigger,)
             else:
-                triggers += (trigger, )
+                triggers += (trigger,)
             parent_env._tasks[task_name].triggers = triggers
         return parent_env
 

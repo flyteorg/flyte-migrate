@@ -8,9 +8,11 @@ from flytekit import task, dynamic, workflow, LaunchPlan, FixedRate, CronSchedul
 def say_hello(name: str):
     print(f"Hello, {name}!")
 
+
 @dynamic()
 def dynamic_task(name: str):
     say_hello(name=name)
+
 
 @workflow
 def wf(name: str):
@@ -30,13 +32,11 @@ lp = LaunchPlan.get_or_create(
     workflow=wf,
     name="v2_cron_schedule_trigger",
     default_inputs={"name": "flyte"},
-    schedule=CronSchedule(
-        schedule="*/10 * * * *"
-    )
+    schedule=CronSchedule(schedule="*/10 * * * *"),
 )
 
 if __name__ == "__main__":
     import flyte
 
     flyte.init_from_config(log_level=logging.DEBUG)
-    flyte.deploy(env)
+    flyte.deploy(lp)
