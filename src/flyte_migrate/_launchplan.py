@@ -3,9 +3,8 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 import flytekit
-from flyte import Cron, FixedRate, TaskEnvironment, Trigger
+from flyte import AsyncFunctionTaskTemplate, Cron, FixedRate, TaskEnvironment, Trigger
 from flyte._logging import logger
-from flytekit.core import workflow as _annotated_workflow
 from flytekit.models import common as _common_models
 from flytekit.models import schedule as _schedule_model
 
@@ -39,8 +38,8 @@ def schedule_to_trigger(
         return None
     if overwrite_cache is None:
         overwrite_cache = False
-    labels = {k: v for k, v in labels.values.items()} if labels else None
-    annotations = {k: v for k, v in annotations.values.items()} if annotations else None
+    labels = dict(labels.values.items()) if labels else None
+    annotations = dict(annotations.values.items()) if annotations else None
     inputs = merge_inputs(default_inputs, fixed_inputs)
 
     automation = None
@@ -64,12 +63,12 @@ def schedule_to_trigger(
     return None
 
 
-class launchPlan_transformer(object):
+class LaunchPlanTransformer(object):
     @classmethod
     def create(
         cls,
         name: str,
-        workflow: _annotated_workflow.WorkflowBase,
+        workflow: AsyncFunctionTaskTemplate,
         default_inputs: Optional[Dict[str, Any]] = None,
         fixed_inputs: Optional[Dict[str, Any]] = None,
         schedule: Optional[_schedule_model.Schedule] = None,
@@ -87,29 +86,31 @@ class launchPlan_transformer(object):
         **kwargs,
     ) -> TaskEnvironment:
         if kwargs:
-            logger.debug(f"Unsupported args {kwargs.values()}")
+            logger.debug(f"Unsupported args in v2 {kwargs.values()}")
+
         task_name = parent_env.name + "." + workflow.func.__name__
-        trigger = schedule_to_trigger(
-            name=name,
-            schedule=schedule,
-            default_inputs=default_inputs,
-            fixed_inputs=fixed_inputs,
-            overwrite_cache=overwrite_cache,
-            auto_activate=auto_activate,
-        )
         if task_name in parent_env._tasks.keys():
             triggers = parent_env._tasks[task_name].triggers
-            if triggers is None:
-                triggers = (trigger,)
-            else:
-                triggers += (trigger,)
-            parent_env._tasks[task_name].triggers = triggers
+            for t in triggers:
+                if t.name == name:
+                    return parent_env
+
+            trigger = schedule_to_trigger(
+                name=name,
+                schedule=schedule,
+                default_inputs=default_inputs,
+                fixed_inputs=fixed_inputs,
+                overwrite_cache=overwrite_cache,
+                auto_activate=auto_activate,
+            )
+            if trigger:
+                parent_env._tasks[task_name].triggers += (trigger,)
         return parent_env
 
     @classmethod
     def get_or_create(
         cls,
-        workflow: _annotated_workflow.WorkflowBase,
+        workflow: AsyncFunctionTaskTemplate,
         name: Optional[str] = None,
         default_inputs: Optional[Dict[str, Any]] = None,
         fixed_inputs: Optional[Dict[str, Any]] = None,
@@ -128,24 +129,23 @@ class launchPlan_transformer(object):
         **kwargs,
     ) -> TaskEnvironment:
         if kwargs:
-            logger.debug(f"Unsupported args {kwargs.values()}")
-        task_name = parent_env.name + "." + workflow.func.__name__
-        trigger = schedule_to_trigger(
-            name=name,
-            schedule=schedule,
-            default_inputs=default_inputs,
-            fixed_inputs=fixed_inputs,
-            overwrite_cache=overwrite_cache,
-            auto_activate=auto_activate,
+            logger.debug(f"Unsupported args in v2 {kwargs.values()}")
+
+        if name is None:
+            return parent_env
+
+        return cls.create(
+            workflow,
+            name,
+            default_inputs,
+            fixed_inputs,
+            schedule,
+            labels,
+            annotations,
+            overwrite_cache,
+            auto_activate,
+            kwargs,
         )
-        if task_name in parent_env._tasks.keys():
-            triggers = parent_env._tasks[task_name].triggers
-            if triggers is None:
-                triggers = (trigger,)
-            else:
-                triggers += (trigger,)
-            parent_env._tasks[task_name].triggers = triggers
-        return parent_env
 
 
-flytekit.LaunchPlan = launchPlan_transformer
+flytekit.LaunchPlan = LaunchPlanTransformer
