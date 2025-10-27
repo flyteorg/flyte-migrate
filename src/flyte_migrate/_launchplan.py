@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 import flytekit
-from flyte import AsyncFunctionTaskTemplate, Cron, FixedRate, TaskEnvironment, Trigger
+from flyte import Cron, FixedRate, TaskEnvironment, Trigger
 from flyte._logging import logger
 from flytekit.models import common as _common_models
 from flytekit.models import schedule as _schedule_model
@@ -68,7 +68,7 @@ class LaunchPlanTransformer(object):
     def create(
         cls,
         name: str,
-        workflow: AsyncFunctionTaskTemplate,
+        workflow: "AsyncFunctionTaskTemplate",
         default_inputs: Optional[Dict[str, Any]] = None,
         fixed_inputs: Optional[Dict[str, Any]] = None,
         schedule: Optional[_schedule_model.Schedule] = None,
@@ -88,6 +88,7 @@ class LaunchPlanTransformer(object):
         if kwargs:
             logger.debug(f"Unsupported args in v2 {kwargs.values()}")
 
+        # Add trigger if it is not existed
         task_name = parent_env.name + "." + workflow.func.__name__
         if task_name in parent_env._tasks.keys():
             triggers = parent_env._tasks[task_name].triggers
@@ -110,7 +111,7 @@ class LaunchPlanTransformer(object):
     @classmethod
     def get_or_create(
         cls,
-        workflow: AsyncFunctionTaskTemplate,
+        workflow: "AsyncFunctionTaskTemplate",
         name: Optional[str] = None,
         default_inputs: Optional[Dict[str, Any]] = None,
         fixed_inputs: Optional[Dict[str, Any]] = None,
@@ -135,16 +136,16 @@ class LaunchPlanTransformer(object):
             return parent_env
 
         return cls.create(
-            workflow,
-            name,
-            default_inputs,
-            fixed_inputs,
-            schedule,
-            labels,
-            annotations,
-            overwrite_cache,
-            auto_activate,
-            kwargs,
+            workflow=workflow,
+            name=name,
+            default_inputs=default_inputs,
+            fixed_inputs=fixed_inputs,
+            schedule=schedule,
+            labels=labels,
+            annotations=annotations,
+            overwrite_cache=overwrite_cache,
+            auto_activate=auto_activate,
+            **kwargs,
         )
 
 
