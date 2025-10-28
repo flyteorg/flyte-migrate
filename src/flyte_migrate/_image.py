@@ -53,6 +53,5 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
     else:
         raise ValueError(f"Unsupported container_image type: {type(container_image)}")
 
-    return image.with_source_folder(Path(__file__).parent.parent, "./src/flyte-migrate").with_env_vars(
-        {"PYTHONPATH": "./src:${PYTHONPATH}"}
-    )
+    # TODO: Install flyte-migrate in non-editable mode
+    return image
