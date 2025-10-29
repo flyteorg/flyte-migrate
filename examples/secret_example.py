@@ -5,7 +5,6 @@ import logging
 from flytekit import Secret, task, workflow
 import os
 
-# Ask Flyte for a secret named (group="demo", key="API_TOKEN")
 @task(secret_requests=[Secret(group="", key="API_TOKEN", env_var="API_TOKEN_ENV")])
 def use_secret_env() -> str:
     val = os.getenv("API_TOKEN_ENV") 
