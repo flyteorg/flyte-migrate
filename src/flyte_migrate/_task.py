@@ -39,7 +39,7 @@ def task_shim(
     docs: Optional[flytekit.Documentation] = None,
     pod_template: Optional[flytekit.PodTemplate] = None,
     pod_template_name: Optional[str] = None,
-    enable_deck: Optional[bool] = False,
+    enable_deck: Optional[bool] = None,
     # labels: Optional[dict[str, str]] = None,
     # annotations: Optional[dict[str, str]] = None,
     **kwargs,
