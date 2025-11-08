@@ -39,6 +39,7 @@ def task_shim(
     docs: Optional[flytekit.Documentation] = None,
     pod_template: Optional[flytekit.PodTemplate] = None,
     pod_template_name: Optional[str] = None,
+    enable_deck: Optional[bool] = False,
     # labels: Optional[dict[str, str]] = None,
     # annotations: Optional[dict[str, str]] = None,
     **kwargs,
@@ -60,7 +61,7 @@ def task_shim(
         )
         parent_env.depends_on.append(env)
         _task_to_env[_transform_image_spec_v1_to_v2(container_image)] = env
-        return env.task(_task_function, retries=retries, timeout=timeout, interruptible=interruptible)
+        return env.task(_task_function, retries=retries, report=enable_deck,timeout=timeout, interruptible=interruptible)
 
     if _task_function is None:
         return v2_decorator
