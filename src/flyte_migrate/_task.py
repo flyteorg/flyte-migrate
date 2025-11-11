@@ -61,7 +61,7 @@ def task_shim(
         )
         parent_env.depends_on.append(env)
         _task_to_env[_transform_image_spec_v1_to_v2(container_image)] = env
-        return env.task(_task_function, retries=retries, report=enable_deck, timeout=timeout, interruptible=interruptible)
+        return env.task(_task_function, retries=retries, report=bool(enable_deck), timeout=timeout, interruptible=interruptible)
 
     if _task_function is None:
         return v2_decorator
