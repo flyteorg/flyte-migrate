@@ -1,41 +1,37 @@
 import flyte_migrate
 import time, logging, flytekit
-import plotly.express as px
 import pandas as pd
 from flytekitplugins.deck.renderer import FrameProfilingRenderer
-from flytekit.core.context_manager import FlyteContextManager
 
-
+"""
+These are packages for frame_renderer example
+"""
 custom_image = flytekit.ImageSpec(
-    platform="linux/arm64",
-    registry="localhost:30000",
     packages=[
         "flytekitplugins-deck-standard",
-        "markdown",
         "pandas",
-        "pillow",
-        "plotly",
-        "pyarrow",
-        "scikit-learn",
         "ydata_profiling",
-        "flytekitplugins-deck-standard",
         "setuptools",
     ]
 )
 
 @flytekit.task(enable_deck=True, container_image=custom_image)
 def simple_example() -> None:
-    a = flytekit.Deck("A", '<p>You can install flytekit using this command: <code>import flytekit-a</code></p>')
-    b = flytekit.Deck("B", '<p>You can install flytekit using this command: <code>import flytekit-b</code></p>')
-    d = flytekit.current_context().default_deck.append('<p>You can install flytekit using this command: <code>import flytekit-c</code></p>')
+    """
+    Created A, B two non default TABs using Deck Class
+    Added content to default(main) TAB
+    Called default TAB will return main TAB in v2
+    Iterating publish->flush method to visualize UI
+    """
+    flytekit.Deck("A", '<p>tab-a</p>')
+    flytekit.Deck("B", '<p>tab-b</p>')
+    flytekit.current_context().default_deck.append('<p>tab-main</p>')
     deck = flytekit.current_context().default_deck
     for i in range(3):
         deck.append(f"<h3>Step {i+1}</h3>\n<p>Working…</p>")
-        time.sleep(3)
         flytekit.Deck.publish()
+        time.sleep(5)
     deck.append(f"<h3>✅ Done!<h3>")
-
-
 
 @flytekit.task(enable_deck=True, container_image=custom_image)
 def frame_renderer() -> None:
@@ -48,11 +44,7 @@ def wf(name: str):
     frame_renderer()
 
 if __name__ == "__main__":
-    """
-    uv pip install -e .  # flyte-migrate
-    uv pip install -e .  # flyte-sdk
-    python examples/hello.py
-    """
+
     import flyte
 
     flyte.init_from_config(log_level=logging.DEBUG)
