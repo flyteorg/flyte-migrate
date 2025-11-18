@@ -10,9 +10,10 @@ image = fl.ImageSpec(packages=["pandas"])
 
 @fl.task(container_image=image)
 def download_file(ff: fl.FlyteFile):
-    print(os.path.isfile(ff.path)) #TODO this should be False
-    ff.download()
-    print(os.path.isfile(ff.path))
+    local_path = ff.download()
+    print(os.path.isfile(local_path))
+    df = pd.read_csv(local_path)
+    print(df)
 
 
 @fl.task(container_image=image)
