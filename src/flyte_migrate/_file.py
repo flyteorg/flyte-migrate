@@ -30,17 +30,9 @@ class FlyteFileV1ToV2:
 
     @classmethod
     def new_remote_file(
-        cls, path: Optional[str | os.PathLike] = None, hash_method: Optional[HashMethod | str] = None, **kwargs
+        cls, file_name: Optional[str | os.PathLike] = None, hash_method: Optional[HashMethod | str] = None, **kwargs
     ) -> "FlyteFileV1ToV2":
-        # TODO
-        # file_name is not supported in File.new_remote
-        ctx = internal_ctx()
-        known_cache_key = hash_method if isinstance(hash_method, str) else None
-        method = hash_method if isinstance(hash_method, HashMethod) else None
-        file_name = os.path.basename(path) if path else None
-        return cls(
-            path=ctx.raw_data.get_random_remote_path(file_name=file_name), hash=known_cache_key, hash_method=method
-        )
+        return cls(file=File.new_remote(file_name=file_name, hash_method=hash_method))
 
     def __init__(self, file: Optional[File] = None, **kwargs):
         if file:
