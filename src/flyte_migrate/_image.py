@@ -25,7 +25,6 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
         else:
             python_version = None
 
-
         # base_image + registry + platform
         # platform works differently with from_base since an image already existed
         if container_image.base_image:
@@ -38,8 +37,6 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
             else:
                 raise ValueError(f"Unsupported base_image type: {type(container_image.base_image)}")
   
-
-
         platform = tuple(p.strip() for p in container_image.platform.split(",")) if container_image.platform else None
         if container_image.base_image:
             if isinstance(container_image.base_image, str):
@@ -77,7 +74,11 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
         pip_index = container_image.pip_index if container_image.pip_index else None
         pip_extra_index_url = container_image.pip_extra_index_url if container_image.pip_extra_index_url else None
         pip_extra_args = container_image.pip_extra_args if container_image.pip_extra_args else None
-        pip_secret_mounts = container_image.pip_secret_mounts if container_image.pip_secret_mounts else None
+        pip_secret_mounts = container_image.pip_secret_mounts 
+        if container_image.pip_secret_mounts:
+            pip_secret_mounts = [flyte.Secret(key=secret_file, mount=mount_path) \
+                                 for secret_file, mount_path in container_image.pip_secret_mounts]
+        else: None
         image = image.with_pip_packages(*pip_packages, index_url=pip_index, extra_index_urls=pip_extra_index_url, \
                                         extra_args=pip_extra_args, secret_mounts=pip_secret_mounts)
         parent_env.image = parent_env.image.with_pip_packages(*pip_packages, index_url=pip_index, \
@@ -111,7 +112,7 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
                     image = image.with_source_folder(path)
                     parent_env.image = parent_env.image.with_source_folder(path)
 
-        # source_root
+        # source_root (Not compatible with source_copy_mode)
         if container_image.source_root:
             path = Path(container_image.source_root)
             image = image.with_source_folder(path)
