@@ -55,8 +55,7 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
         else:
             image = flyte.Image.from_debian_base(name=container_image.name, python_version=python_version, \
                                                  registry=container_image.registry, platform=platform)
-        parent_env.image = flyte.Image.from_debian_base(platform=platform, registry=container_image.registry)\
-            .with_pip_packages("setuptools", "flytekit")
+            parent_env.image = parent_env.image.clone(name=container_image.name, registry=container_image.registry, python_version=python_version)
 
         # apt packages
         if container_image.apt_packages:
