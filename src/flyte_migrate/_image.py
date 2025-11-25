@@ -24,12 +24,34 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
             python_version = tuple(map(int, container_image.python_version.split(".")))
         else:
             python_version = None
+
+
         # base_image + registry + platform
         # platform works differently with from_base since an image already existed
+        if container_image.base_image:
+            if isinstance(container_image.base_image, str):
+                base_image_uri = container_image.base_image
+            elif isinstance(container_image.base_image, flytekit.ImageSpec):
+                # Recursively transform the base ImageSpec first
+                base_flyte_image = _transform_image_spec_v1_to_v2(container_image.base_image)
+                base_image_uri = base_flyte_image.uri
+            else:
+                raise ValueError(f"Unsupported base_image type: {type(container_image.base_image)}")
+  
+
+
         platform = tuple(p.strip() for p in container_image.platform.split(",")) if container_image.platform else None
         if container_image.base_image:
+            if isinstance(container_image.base_image, str):
+                base_image_uri = container_image.base_image
+            elif isinstance(container_image.base_image, flytekit.ImageSpec):
+                # Recursively transform the base ImageSpec first
+                base_flyte_image = _transform_image_spec_v1_to_v2(container_image.base_image)
+                base_image_uri = base_flyte_image.uri
+            else:
+                raise ValueError(f"Unsupported base_image type: {type(container_image.base_image)}")
             image = (
-                flyte.Image.from_base(container_image.base_image)
+                flyte.Image.from_base(base_image_uri)
                 .clone(name=container_image.name, python_version=python_version, registry=container_image.registry)
                 .with_pip_packages("flyte", pre=True)
             )
@@ -46,11 +68,12 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
     
         # pip_packages, pip_index, pip_extra_index_url, pip_extra_args, pip_secret_mounts
         pip_packages = ["flytekit"]
-        for pkg in container_image.packages:
-            pip_packages.append(pkg)
+        for pkg in (container_image.packages or []):
             pkg_name = re.split(r"[<>=!~]", pkg)[0].strip()
-            if pkg_name in _package_v1_to_v2:
-                pip_packages.append(_package_v1_to_v2[pkg_name])
+        if pkg_name in _package_v1_to_v2:
+            pip_packages.append(_package_v1_to_v2[pkg_name])
+        else:
+            pip_packages.append(pkg)
         pip_index = container_image.pip_index if container_image.pip_index else None
         pip_extra_index_url = container_image.pip_extra_index_url if container_image.pip_extra_index_url else None
         pip_extra_args = container_image.pip_extra_args if container_image.pip_extra_args else None
@@ -76,6 +99,23 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
         if container_image.requirements:
             image = image.with_requirements(container_image.requirements)
             parent_env.image = parent_env.image.with_requirements(container_image.requirements)
+
+        # copy
+        if container_image.copy:
+            for path_str in container_image.copy:
+                path = Path(path_str)
+                if path.is_dir():
+                    image = image.with_source_file(path)
+                    parent_env.image = parent_env.image.with_source_file(path)
+                else:
+                    image = image.with_source_folder(path)
+                    parent_env.image = parent_env.image.with_source_folder(path)
+
+        # source_root
+        if container_image.source_root:
+            path = Path(container_image.source_root)
+            image = image.with_source_folder(path)
+            parent_env.image = parent_env.image.with_source_folder(path, copy_contents_only=True)
 
     elif isinstance(container_image, str):
         image = flyte.Image.from_base(container_image).with_pip_packages("flyte")
