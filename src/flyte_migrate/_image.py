@@ -2,7 +2,7 @@ import re
 from functools import cache
 from pathlib import Path
 from typing import Dict
-
+import logging
 import flyte
 import flytekit
 
@@ -13,6 +13,7 @@ _package_v1_to_v2: Dict[str, str] = {
     "flytekitplugins-ray": "flyteplugins-ray",
     "flytekitplugins-dask": "flyteplugins-dask",
 }
+logger = logging.getLogger(__name__)
 
 @cache
 def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.Image | str) -> flyte.Image:
@@ -105,17 +106,21 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
             for path_str in container_image.copy:
                 path = Path(path_str)
                 if path.is_dir():
-                    image = image.with_source_file(path)
-                    parent_env.image = parent_env.image.with_source_file(path)
-                else:
                     image = image.with_source_folder(path)
                     parent_env.image = parent_env.image.with_source_folder(path)
+                else:
+                    image = image.with_source_file(path)
+                    parent_env.image = parent_env.image.with_source_file(path)
 
         # source_root (Not compatible with source_copy_mode)
         if container_image.source_root:
             path = Path(container_image.source_root)
             image = image.with_source_folder(path)
             parent_env.image = parent_env.image.with_source_folder(path, copy_contents_only=True)
+
+        # builder
+        if container_image.builder in {"envd", "noop"}:
+            logger.warning(f"envd/noop builder not supported in v2, ignoring")
 
     elif isinstance(container_image, str):
         image = flyte.Image.from_base(container_image).with_pip_packages("flyte")
