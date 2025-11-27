@@ -16,13 +16,15 @@ _package_v1_to_v2: Dict[str, str] = {
 def _extract_attributes(parent, child):
     if child.apt_packages:
         if not parent.apt_packages: parent.apt_packages = []
-        parent.apt_packages.extend(child.apt_packages)
+        parent = parent.with_apt_packages(child.apt_packages)
     if child.packages:
-        if not parent.packages: parent.apt_packages = []
+        if not parent.packages: parent.packages = []
         parent.packages.extend(child.packages)
     if child.pip_index:
-        if not parent.pip_extra_index_url: parent.pip_extra_index_url = []
-        parent.pip_extra_index_url.extend(child.pip_index)
+        if not parent.pip_index: parent.pip_index = child.pip_index
+        else: 
+            if not parent.pip_extra_index_url: parent.pip_extra_index_url = []
+            parent.pip_extra_index_url.extend(child.pip_index)
     if child.pip_extra_index_url:
         if not parent.pip_extra_index_url: parent.pip_extra_index_url = []
         parent.pip_extra_index_url.extend(child.pip_extra_index_url)
@@ -44,7 +46,7 @@ def _extract_attributes(parent, child):
             merged_file = "merged_requirements.txt"
             with open(parent.requirements, 'r') as f1, open(child.requirements, 'r') as f2, open(merged_file, 'w') as out:
                 out.write(f1.read())
-                out. write('\n')
+                out.write('\n')
                 out.write(f2. read())
             parent.requirements = merged_file
     if child.copy:
@@ -65,6 +67,8 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
         # base_image + registry + platform
         # platform works differently with from_base since an image already existed
         platform = tuple(p.strip() for p in container_image.platform.split(",")) if container_image.platform else None
+        if isinstance(container_image.base_image, flytekit.ImageSpec):
+            _extract_attributes(container_image, container_image.base_image)
         if isinstance(container_image.base_image, str):
             image = (
                 flyte.Image.from_base(container_image.base_image)
@@ -72,8 +76,6 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
                 .with_pip_packages("flyte", pre=True)
             )
         else:
-            if isinstance(container_image.base_image, flytekit.ImageSpec):
-                 _extract_attributes(container_image, container_image.base_image)
             image = flyte.Image.from_debian_base(name=container_image.name, python_version=python_version, \
                                                  registry=container_image.registry, platform=platform)
             parent_env.image = parent_env.image.clone(name=container_image.name, registry=container_image.registry, python_version=python_version)
@@ -87,10 +89,10 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
         pip_packages = ["flytekit"]
         for pkg in (container_image.packages or []):
             pkg_name = re.split(r"[<>=!~]", pkg)[0].strip()
-        if pkg_name in _package_v1_to_v2:
-            pip_packages.append(_package_v1_to_v2[pkg_name])
-        else:
-            pip_packages.append(pkg)
+            if pkg in _package_v1_to_v2:
+                pip_packages.append(_package_v1_to_v2[pkg])
+            else:
+                pip_packages.append(pkg)
         pip_index = container_image.pip_index if container_image.pip_index else None
         pip_extra_index_url = container_image.pip_extra_index_url if container_image.pip_extra_index_url else None
         pip_extra_args = container_image.pip_extra_args if container_image.pip_extra_args else None
