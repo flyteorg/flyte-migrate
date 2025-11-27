@@ -1,8 +1,5 @@
-from pathlib import Path
-from typing import Tuple
-
-import flytekit
 import flyte_migrate  # noqa: F401, I001
+
 import os
 import torch
 from flytekit import FlyteFile, ImageSpec, Resources, task, workflow
