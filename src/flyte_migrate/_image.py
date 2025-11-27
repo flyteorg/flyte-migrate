@@ -72,8 +72,8 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
                 .with_pip_packages("flyte", pre=True)
             )
         else:
-            # if isinstance(container_image.base_image, flytekit.ImageSpec):
-            #      _extract_attributes(container_image, container_image.base_image)
+            if isinstance(container_image.base_image, flytekit.ImageSpec):
+                 _extract_attributes(container_image, container_image.base_image)
             image = flyte.Image.from_debian_base(name=container_image.name, python_version=python_version, \
                                                  registry=container_image.registry, platform=platform)
             parent_env.image = parent_env.image.clone(name=container_image.name, registry=container_image.registry, python_version=python_version)
