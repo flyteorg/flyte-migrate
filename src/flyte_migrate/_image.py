@@ -2,7 +2,7 @@ import re
 from functools import cache
 from pathlib import Path
 from typing import Dict
-import logging
+from flyte._logging import logger
 import flyte
 import flytekit
 
@@ -13,7 +13,43 @@ _package_v1_to_v2: Dict[str, str] = {
     "flytekitplugins-ray": "flyteplugins-ray",
     "flytekitplugins-dask": "flyteplugins-dask",
 }
-logger = logging.getLogger(__name__)
+def _extract_attributes(parent, child):
+    if child.apt_packages:
+        if not parent.apt_packages: parent.apt_packages = []
+        parent.apt_packages.extend(child.apt_packages)
+    if child.packages:
+        if not parent.packages: parent.apt_packages = []
+        parent.packages.extend(child.packages)
+    if child.pip_index:
+        if not parent.pip_extra_index_url: parent.pip_extra_index_url = []
+        parent.pip_extra_index_url.extend(child.pip_index)
+    if child.pip_extra_index_url:
+        if not parent.pip_extra_index_url: parent.pip_extra_index_url = []
+        parent.pip_extra_index_url.extend(child.pip_extra_index_url)
+    if child.pip_secret_mounts:
+        if not parent.pip_secret_mounts: parent.pip_secret_mounts = []
+        parent.pip_secret_mounts.extend(child.pip_secret_mounts)
+    if child.pip_extra_args:
+        if not parent.pip_extra_args: parent.pip_extra_args = child.pip_extra_args
+        else: parent.pip_extra_args = parent.pip_extra_args + f" {child.pip_extra_args}"
+    if child.env:
+        if not parent.env: parent.env = {}
+        parent.env.update(child.env)
+    if child.commands:
+        if not parent.commands: parent.commands = []
+        parent.commands.extend(child.commands)
+    if child.requirements:
+        if not parent.requirements: parent.requirements = child.requirements
+        else:
+            merged_file = "merged_requirements.txt"
+            with open(parent.requirements, 'r') as f1, open(child.requirements, 'r') as f2, open(merged_file, 'w') as out:
+                out.write(f1.read())
+                out. write('\n')
+                out.write(f2. read())
+            parent.requirements = merged_file
+    if child.copy:
+        if not parent.copy: parent.copy = []
+        parent.copy.extend(child.copy)
 
 @cache
 def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.Image | str) -> flyte.Image:
@@ -28,40 +64,24 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
 
         # base_image + registry + platform
         # platform works differently with from_base since an image already existed
-        if container_image.base_image:
-            if isinstance(container_image.base_image, str):
-                base_image_uri = container_image.base_image
-            elif isinstance(container_image.base_image, flytekit.ImageSpec):
-                # Recursively transform the base ImageSpec first
-                base_flyte_image = _transform_image_spec_v1_to_v2(container_image.base_image)
-                base_image_uri = base_flyte_image.uri
-            else:
-                raise ValueError(f"Unsupported base_image type: {type(container_image.base_image)}")
-  
         platform = tuple(p.strip() for p in container_image.platform.split(",")) if container_image.platform else None
-        if container_image.base_image:
-            if isinstance(container_image.base_image, str):
-                base_image_uri = container_image.base_image
-            elif isinstance(container_image.base_image, flytekit.ImageSpec):
-                # Recursively transform the base ImageSpec first
-                base_flyte_image = _transform_image_spec_v1_to_v2(container_image.base_image)
-                base_image_uri = base_flyte_image.uri
-            else:
-                raise ValueError(f"Unsupported base_image type: {type(container_image.base_image)}")
+        if isinstance(container_image.base_image, str):
             image = (
-                flyte.Image.from_base(base_image_uri)
+                flyte.Image.from_base(container_image.base_image)
                 .clone(name=container_image.name, python_version=python_version, registry=container_image.registry)
                 .with_pip_packages("flyte", pre=True)
             )
         else:
+            # if isinstance(container_image.base_image, flytekit.ImageSpec):
+            #      _extract_attributes(container_image, container_image.base_image)
             image = flyte.Image.from_debian_base(name=container_image.name, python_version=python_version, \
                                                  registry=container_image.registry, platform=platform)
             parent_env.image = parent_env.image.clone(name=container_image.name, registry=container_image.registry, python_version=python_version)
 
         # apt packages
         if container_image.apt_packages:
-            image = image.with_apt_packages(*container_image.apt_packages)
-            parent_env.image = parent_env.image.with_apt_packages(*container_image.apt_packages)
+            image = image.with_apt_packages(*container_image.packages)
+            parent_env.image = parent_env.image.with_apt_packages(*container_image.packages)
     
         # pip_packages, pip_index, pip_extra_index_url, pip_extra_args, pip_secret_mounts
         pip_packages = ["flytekit"]
