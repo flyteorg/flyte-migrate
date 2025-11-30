@@ -2,14 +2,14 @@ import os
 import typing
 from contextlib import contextmanager
 from pathlib import Path
-from typing import IO, Any, Generator, Optional
+from typing import IO, Any, Generator, Generic, Optional
 
 import flytekit
-from flyte._context import internal_ctx
 from flyte.io import File
 from flyte.io._hashing_io import HashMethod
 from flyte.types import TypeEngine, TypeTransformer, TypeTransformerFailedError
 from flyteidl2.core import literals_pb2, types_pb2
+from pydantic import BaseModel
 
 
 def noop(): ...
@@ -18,39 +18,40 @@ def noop(): ...
 T = typing.TypeVar("T")
 
 
-class FlyteFileV1ToV2:
-    _file: Optional[File] = None
+def CreateV2File(file: Optional[File] = None, **kwargs) -> File:
+    if isinstance(file, File):
+        return file
+    else:
+        return File(**kwargs)
+
+
+class FlyteFileV1ToV2(BaseModel, Generic[T]):
+    file: File = None
     is_download: bool = False
     local_path: str = ""
 
     @classmethod
     def from_source(cls, source: str | os.PathLike) -> "FlyteFileV1ToV2":
         python_val = File.from_existing_remote(source)
-        return cls(file=python_val)
+        return cls(file=python_val.model_dump())
 
     @classmethod
     def new_remote_file(
         cls, file_name: Optional[str | os.PathLike] = None, hash_method: Optional[HashMethod | str] = None, **kwargs
     ) -> "FlyteFileV1ToV2":
-        return cls(file=File.new_remote(file_name=file_name, hash_method=hash_method))
-
-    def __init__(self, file: Optional[File] = None, **kwargs):
-        if file:
-            self._file = file
-        else:
-            f = File(**kwargs)
-            self._file = f
+        file = File.new_remote(file_name=file_name, hash_method=hash_method)
+        return cls(file=file.model_dump())
 
     @classmethod
     def new(cls, filename: str | os.PathLike) -> "FlyteFileV1ToV2":
-        return cls(file=File(path=filename))
+        return cls(file=File(path=filename).model_dump())
 
     def download(self) -> str:
         return self.__fspath__()
 
     def __fspath__(self) -> str:
         if not self.is_download:
-            self.local_path = self._file.download_sync()
+            self.local_path = self.file.download_sync()
             self.is_download = True
         return self.local_path
 
@@ -60,28 +61,28 @@ class FlyteFileV1ToV2:
         *args,
         **kwargs,
     ) -> Generator[IO[Any], None, None]:
-        with self._file.open_sync(*args, **kwargs) as f:
+        with self.file.open_sync(*args, **kwargs) as f:
             yield f
 
     @property
     def path(self) -> str:
-        return self._file.path
+        return self.file.path
 
     @property
     def name(self) -> str:
-        return self._file.name
+        return self.file.name
 
     @property
     def format(self) -> str:
-        return self._file.format
+        return self.file.format
 
     @property
     def hash(self) -> str:
-        return self._file.hash
+        return self.file.hash
 
     @property
     def hash_method(self):
-        return self._file.hash_method
+        return self.file.hash_method
 
 
 class FlyteFilev1Tov2Transformer(TypeTransformer[FlyteFileV1ToV2]):
@@ -112,7 +113,7 @@ class FlyteFilev1Tov2Transformer(TypeTransformer[FlyteFileV1ToV2]):
         """Convert a File object to a Flyte literal."""
         if not isinstance(python_val, FlyteFileV1ToV2):
             raise TypeTransformerFailedError(f"Expected File object, received {type(python_val)}")
-        v2_file = python_val._file
+        v2_file = python_val.file
         # Get flyte File to python_val
         return literals_pb2.Literal(
             scalar=literals_pb2.Scalar(
@@ -145,7 +146,7 @@ class FlyteFilev1Tov2Transformer(TypeTransformer[FlyteFileV1ToV2]):
         filename = Path(uri).name
         hash_value = lv.hash if lv.hash else None
         f: FlyteFileV1ToV2 = FlyteFileV1ToV2(
-            path=uri, name=filename, format=lv.scalar.blob.metadata.type.format, hash=hash_value
+            file=CreateV2File(path=uri, name=filename, format=lv.scalar.blob.metadata.type.format, hash=hash_value)
         )
         return f
 
