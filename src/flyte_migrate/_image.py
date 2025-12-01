@@ -72,18 +72,26 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
         if isinstance(container_image.base_image, str):
             image = (
                 flyte.Image.from_base(container_image.base_image)
-                .clone(name=container_image.name, python_version=python_version, registry=container_image.registry)
-                .with_pip_packages("flyte", pre=True)
+                .clone(name=container_image.name, 
+                       python_version=python_version, 
+                       registry=container_image.registry
+                ).with_pip_packages("flyte", pre=True)
             )
         else:
-            image = flyte.Image.from_debian_base(name=container_image.name, python_version=python_version, \
-                                                 registry=container_image.registry, platform=platform)
-            parent_env.image = parent_env.image.clone(name=container_image.name, registry=container_image.registry, python_version=python_version)
+            image = flyte.Image.from_debian_base(
+                name=container_image.name, 
+                python_version=python_version, 
+                registry=container_image.registry, 
+                platform=platform
+            )
+        parent_env.image = parent_env.image.clone(
+            name=container_image.name, registry=container_image.registry, python_version=python_version
+        )
 
         # apt packages
         if container_image.apt_packages:
-            image = image.with_apt_packages(*container_image.packages)
-            parent_env.image = parent_env.image.with_apt_packages(*container_image.packages)
+            image = image.with_apt_packages(*container_image.apt_packages)
+            parent_env.image = parent_env.image.with_apt_packages(*container_image.apt_packages)
     
         # pip_packages, pip_index, pip_extra_index_url, pip_extra_args, pip_secret_mounts
         pip_packages = ["flytekit"]
@@ -93,20 +101,26 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
                 pip_packages.append(_package_v1_to_v2[pkg])
             else:
                 pip_packages.append(pkg)
-        pip_index = container_image.pip_index if container_image.pip_index else None
-        pip_extra_index_url = container_image.pip_extra_index_url if container_image.pip_extra_index_url else None
-        pip_extra_args = container_image.pip_extra_args if container_image.pip_extra_args else None
-        pip_secret_mounts = container_image.pip_secret_mounts 
+        
+        pip_secret_mounts = None 
         if container_image.pip_secret_mounts:
             pip_secret_mounts = [flyte.Secret(key=secret_file, mount=mount_path) \
                                  for secret_file, mount_path in container_image.pip_secret_mounts]
-        else: None
-        image = image.with_pip_packages(*pip_packages, index_url=pip_index, extra_index_urls=pip_extra_index_url, \
-                                        extra_args=pip_extra_args, secret_mounts=pip_secret_mounts)
-        parent_env.image = parent_env.image.with_pip_packages(*pip_packages, index_url=pip_index, \
-                                                              extra_index_urls=pip_extra_index_url, \
-                                                              extra_args=pip_extra_args, \
-                                                              secret_mounts=pip_secret_mounts)
+        image = image.with_pip_packages(
+            *pip_packages, 
+            index_url=container_image.pip_index, 
+            extra_index_urls=container_image.pip_extra_index_url,
+            extra_args=container_image.pip_extra_args, 
+            secret_mounts=container_image.pip_secret_mounts
+        )
+        
+        parent_env.image = parent_env.image.with_pip_packages(
+            *pip_packages, 
+            index_url=container_image.pip_index,
+            extra_index_urls=container_image.pip_extra_index_url,
+            extra_args=container_image.pip_extra_args,
+            secret_mounts=pip_secret_mounts
+        )
         
         # env
         if container_image.env:

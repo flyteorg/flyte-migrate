@@ -26,8 +26,6 @@ image_spec = _transform_image_spec_v1_to_v2(
 def my_task():
     print(f"Image Type: {type(image_spec)}")
 
-print(image_spec)
-print(parent_env.image)
 
 if __name__ == "__main__":
 
