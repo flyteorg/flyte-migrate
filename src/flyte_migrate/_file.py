@@ -2,14 +2,15 @@ import os
 import typing
 from contextlib import contextmanager
 from pathlib import Path
-from typing import IO, Any, Generator, Generic, Optional
+from typing import IO, Any, Dict, Generator, Generic, Optional
 
 import flytekit
 from flyte.io import File
 from flyte.io._hashing_io import HashMethod
 from flyte.types import TypeEngine, TypeTransformer, TypeTransformerFailedError
 from flyteidl2.core import literals_pb2, types_pb2
-from pydantic import BaseModel
+from mashumaro.types import SerializableType
+from pydantic import BaseModel, model_validator
 
 
 def noop(): ...
@@ -25,10 +26,33 @@ def CreateV2File(file: Optional[File] = None, **kwargs) -> File:
         return File(**kwargs)
 
 
-class FlyteFileV1ToV2(BaseModel, Generic[T]):
+class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
     file: File = None
     is_download: bool = False
     local_path: str = ""
+
+    def _serialize(self) -> Dict[str, Optional[str]]:
+        pyd_dump = self.model_dump()
+        return pyd_dump
+
+    @classmethod
+    def _deserialize(cls, file_dump: Dict[str, Optional[str]]) -> "FlyteFileV1ToV2":
+        return FlyteFileV1ToV2.model_validate(file_dump)
+
+    @model_validator(mode="before")
+    @classmethod
+    def pre_init(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        if "file" not in data or data["file"] is None:
+            file_field_candidates = {
+                key: value for key, value in data.items() if key not in {"file", "is_download", "local_path"}
+            }
+
+            if file_field_candidates:
+                for k in file_field_candidates.keys():
+                    data.pop(k)
+
+                data["file"] = CreateV2File(**file_field_candidates)
+        return data
 
     @classmethod
     def from_source(cls, source: str | os.PathLike) -> "FlyteFileV1ToV2":
@@ -114,7 +138,6 @@ class FlyteFilev1Tov2Transformer(TypeTransformer[FlyteFileV1ToV2]):
         if not isinstance(python_val, FlyteFileV1ToV2):
             raise TypeTransformerFailedError(f"Expected File object, received {type(python_val)}")
         v2_file = python_val.file
-        # Get flyte File to python_val
         return literals_pb2.Literal(
             scalar=literals_pb2.Scalar(
                 blob=literals_pb2.Blob(

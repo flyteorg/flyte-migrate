@@ -1,6 +1,6 @@
 import os
-import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 
 import flytekit as fl
 import pandas as pd
@@ -26,19 +26,25 @@ def download_file(ff: fl.FlyteFile):
 
 @fl.task(container_image=image)
 def upload_data() -> FlyteTypes:
-    file_path = tempfile.NamedTemporaryFile(delete=False)
-    file_path.write(b"Hello, World!")
-
-    fs = FlyteTypes(
-        file=fl.FlyteFile(file_path.name),
-    )
+    path = str(Path(fl.current_context().working_directory) / "data.csv")
+    d = {"col1": [0, 1, 2, 3], "col2": pd.Series([2, 3], index=[2, 3])}
+    data = pd.DataFrame(data=d, index=[0, 1, 2, 3])
+    data.to_csv(path)
+    file = fl.FlyteFile(path=path)
+    fs = FlyteTypes(file=file)
+    print(fs)
     return fs
 
 
 @fl.task(container_image=image)
-def download_data(res: FlyteTypes):
-    f = open(res.file, "r")
-    assert f.read() == "Hello, World!"
+def download_flyte_types(res: FlyteTypes):
+    print(res)
+    local_path = res.file.download()
+    df = pd.read_csv(local_path)
+    print(df)
+    with open(res.file, "r") as f:
+        df = pd.read_csv(f)
+        print(df)
 
 
 @fl.task(container_image=image)
@@ -63,5 +69,5 @@ def wf():
     o1 = load_csv()
     o2 = remove_some_rows(ff=o1)
     download_file(ff=o2)
-    # o3 = upload_data()
-    # download_data(res=o3)
+    o3 = upload_data()
+    download_flyte_types(res=o3)
