@@ -17,23 +17,27 @@ _package_v1_to_v2: Dict[str, str] = {
 @cache
 def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.Image | str) -> flyte.Image:
     if isinstance(container_image, flytekit.ImageSpec):
+        python_version_tuple: tuple[int, int] | None = None
         if container_image.python_version:
-            python_version = tuple(map(int, container_image.python_version.split(".")))
-        else:
-            python_version = None
+            version_parts = tuple(map(int, container_image.python_version.split(".")))
+            # Take only the first two parts (major.minor)
+            if len(version_parts) >= 2:
+                python_version_tuple = (version_parts[0], version_parts[1])
+
         if container_image.base_image:
             image = (
                 flyte.Image.from_base(container_image.base_image)
-                .clone(name=container_image.name, python_version=python_version)
+                .clone(name=container_image.name, python_version=python_version_tuple)
                 .with_pip_packages("flyte", pre=True)
             )
         else:
-            image = flyte.Image.from_debian_base(name=container_image.name, python_version=python_version)
+            image = flyte.Image.from_debian_base(name=container_image.name, python_version=python_version_tuple)
 
         # Apt packages
         if container_image.apt_packages:
             image = image.with_apt_packages(*container_image.apt_packages)
-            parent_env.image = parent_env.image.with_apt_packages(*container_image.apt_packages)
+            if isinstance(parent_env.image, flyte.Image):
+                parent_env.image = parent_env.image.with_apt_packages(*container_image.apt_packages)
         # Pip packages
         pip_packages = ["flytekit"]
         for pkg in container_image.packages:
@@ -42,7 +46,8 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
             if pkg_name in _package_v1_to_v2:
                 pip_packages.append(_package_v1_to_v2[pkg_name])
         image = image.with_pip_packages(*pip_packages)
-        parent_env.image = parent_env.image.with_pip_packages(*pip_packages)
+        if isinstance(parent_env.image, flyte.Image):
+            parent_env.image = parent_env.image.with_pip_packages(*pip_packages)
 
     elif isinstance(container_image, str):
         image = flyte.Image.from_base(container_image).with_pip_packages("flyte")

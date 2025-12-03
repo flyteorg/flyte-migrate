@@ -1,9 +1,10 @@
 from typing import Any, Dict, Optional
 
 import flytekit
-from flyte import Cron, FixedRate, TaskEnvironment, Trigger
+from flyte import TaskEnvironment
 from flyte._logging import logger
 from flyte._task import AsyncFunctionTaskTemplate
+from flyte._trigger import Cron, FixedRate, Trigger
 from flytekit.models import common as _common_models
 from flytekit.models import schedule as _schedule_model
 
@@ -13,11 +14,11 @@ from ._workflow import parent_env
 def merge_inputs(
     default_inputs: Optional[Dict[str, Any]] = None,
     fixed_inputs: Optional[Dict[str, Any]] = None,
-) -> dict:
+) -> Dict[str, Any]:
     if default_inputs is None and fixed_inputs is None:
         return {}
     if fixed_inputs is None:
-        return default_inputs
+        return default_inputs  # type: ignore[return-value]
     if default_inputs is None:
         return fixed_inputs
     return {**default_inputs, **fixed_inputs}
@@ -80,7 +81,8 @@ class LaunchPlanTransformer(object):
         # Add trigger if it is not existed
         task_name = parent_env.name + "." + workflow.func.__name__
         if task_name in parent_env._tasks:
-            triggers = parent_env._tasks[task_name].triggers
+            task_template = parent_env._tasks[task_name]
+            triggers = getattr(task_template, "triggers", ())
             for t in triggers:
                 if t.name == name:
                     return parent_env
@@ -93,7 +95,8 @@ class LaunchPlanTransformer(object):
                 overwrite_cache=overwrite_cache,
                 auto_activate=auto_activate,
             )
-            parent_env._tasks[task_name].triggers += (trigger,)
+            if hasattr(task_template, "triggers"):
+                task_template.triggers += (trigger,)  # type: ignore[attr-defined]
         return parent_env
 
     @classmethod
