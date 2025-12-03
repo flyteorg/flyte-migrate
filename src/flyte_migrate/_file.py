@@ -12,18 +12,23 @@ from flyteidl2.core import literals_pb2, types_pb2
 from mashumaro.types import SerializableType
 from pydantic import BaseModel, model_validator
 
-
-def noop(): ...
-
-
 T = typing.TypeVar("T")
 
 
 def CreateV2File(file: Optional[File] = None, **kwargs) -> File:
     if isinstance(file, File):
         return file
+    path = kwargs.get("path")
+    if path is None:
+        raise ValueError(f"File not found: {path}")
+
+    if os.path.exists(path):
+        local_path = kwargs.get("path")
+        remote_path = kwargs.get("remote_path", None)
+        return File.from_local_sync(local_path=local_path, remote_destination=remote_path)
     else:
-        return File(**kwargs)
+        remote_path = kwargs.get("path")
+        return File.from_existing_remote(remote_path=remote_path)
 
 
 class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
