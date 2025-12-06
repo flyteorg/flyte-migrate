@@ -924,7 +924,7 @@ wheels = [
 
 [[package]]
 name = "flyte"
-version = "2.0.0b22"
+version = "2.0.0b34"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -933,7 +933,9 @@ dependencies = [
     { name = "click" },
     { name = "cloudpickle" },
     { name = "dataclasses-json" },
+    { name = "docstring-parser" },
     { name = "flyteidl" },
+    { name = "flyteidl2" },
     { name = "fsspec" },
     { name = "grpcio" },
     { name = "httpx" },
@@ -948,7 +950,7 @@ dependencies = [
     { name = "toml" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/01/b5/9f371473cb0d0874a8554d5bfaa25ad9a8f9ce8a64defcb1a361f6ca9aab/flyte-2.0.0b22-py3-none-any.whl", hash = "sha256:581de438a5d192fb91ccfdba1414a794dca99af0bbb76939ddca7ce06e157122", size = 424529, upload-time = "2025-09-17T18:54:26.069Z" },
+    { url = "https://files.pythonhosted.org/packages/82/9a/97905d8f8f7c47328d1a0e78e612aec01afc38b9117251bbc2f8438bc5fb/flyte-2.0.0b34-py3-none-any.whl", hash = "sha256:ca40ba54bcf3ea4b6ae29425690231de35789bbe5783fdcd0607d148c811c66b", size = 419784, upload-time = "2025-12-02T19:32:56.397Z" },
 ]
 
 [[package]]
@@ -982,7 +984,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "flyte" },
+    { name = "flyte", specifier = "==2.0.0b34" },
     { name = "flyteidl2", git = "https://github.com/flyteorg/flyte.git?subdirectory=gen%2Fpython&rev=v2" },
     { name = "flytekit" },
 ]

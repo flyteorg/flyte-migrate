@@ -5,7 +5,7 @@ description = "migrate v1 workflows to v2"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "flyte",
+    "flyte==2.0.0b34",
     "flytekit",
     "flyteidl2",
 ]

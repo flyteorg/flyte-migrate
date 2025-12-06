@@ -23,11 +23,11 @@ def CreateV2File(file: Optional[File[T]] = None, **kwargs) -> File[T]:
         raise ValueError(f"File not found: {path}")
 
     if os.path.exists(path):
-        local_path = kwargs.get("path")
+        local_path = path
         remote_path = kwargs.get("remote_path", None)
         return File.from_local_sync(local_path=local_path, remote_destination=remote_path)
     else:
-        remote_path = kwargs.get("path")
+        remote_path = path
         return File.from_existing_remote(remote_path=remote_path)
 
 
@@ -70,14 +70,16 @@ class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
 
     @classmethod
     def new_remote_file(
-        cls, file_name: Optional[str | os.PathLike] = None, hash_method: Optional[HashMethod | str] = None, **kwargs
+        cls, file_name: Optional[str] = None, hash_method: Optional[HashMethod | str] = None, **kwargs
     ) -> "FlyteFileV1ToV2":
         file: File = File.new_remote(file_name=file_name, hash_method=hash_method)
         return cls(file=file)
 
     @classmethod
     def new(cls, filename: str | os.PathLike) -> "FlyteFileV1ToV2":
-        file: File = File.from_local_sync(local_path=filename)
+        if isinstance(filename, os.PathLike):
+            local_path = Path(filename)
+        file: File = File.from_local_sync(local_path=local_path)
         return cls(file=file)
 
     def download(self) -> str:
