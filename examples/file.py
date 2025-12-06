@@ -32,13 +32,11 @@ def upload_data() -> FlyteTypes:
     data.to_csv(path)
     file = fl.FlyteFile(path=path)
     fs = FlyteTypes(file=file)
-    print(fs)
     return fs
 
 
 @fl.task(container_image=image)
 def download_flyte_types(res: FlyteTypes):
-    print(res)
     local_path = res.file.download()
     df = pd.read_csv(local_path)
     print(df)
