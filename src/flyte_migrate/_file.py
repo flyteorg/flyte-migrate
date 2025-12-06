@@ -15,7 +15,7 @@ from pydantic import BaseModel, model_validator
 T = typing.TypeVar("T")
 
 
-def CreateV2File(file: Optional[File] = None, **kwargs) -> File:
+def CreateV2File(file: Optional[File[T]] = None, **kwargs) -> File[T]:
     if isinstance(file, File):
         return file
     path = kwargs.get("path")
@@ -32,7 +32,7 @@ def CreateV2File(file: Optional[File] = None, **kwargs) -> File:
 
 
 class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
-    file: File = None
+    file: File
     is_download: bool = False
     local_path: str = ""
 
@@ -61,19 +61,24 @@ class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
 
     @classmethod
     def from_source(cls, source: str | os.PathLike) -> "FlyteFileV1ToV2":
-        python_val = File.from_existing_remote(source)
-        return cls(file=python_val.model_dump())
+        if isinstance(source, os.PathLike):
+            path = str(source)
+        else:
+            path = source
+        python_val: File = File.from_existing_remote(path)
+        return cls(file=python_val)
 
     @classmethod
     def new_remote_file(
         cls, file_name: Optional[str | os.PathLike] = None, hash_method: Optional[HashMethod | str] = None, **kwargs
     ) -> "FlyteFileV1ToV2":
-        file = File.new_remote(file_name=file_name, hash_method=hash_method)
-        return cls(file=file.model_dump())
+        file: File = File.new_remote(file_name=file_name, hash_method=hash_method)
+        return cls(file=file)
 
     @classmethod
     def new(cls, filename: str | os.PathLike) -> "FlyteFileV1ToV2":
-        return cls(file=File(path=filename).model_dump())
+        file: File = File.from_local_sync(local_path=filename)
+        return cls(file=file)
 
     def download(self) -> str:
         return self.__fspath__()
@@ -98,7 +103,7 @@ class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
         return self.file.path
 
     @property
-    def name(self) -> str:
+    def name(self) -> Optional[str]:
         return self.file.name
 
     @property
@@ -106,7 +111,7 @@ class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
         return self.file.format
 
     @property
-    def hash(self) -> str:
+    def hash(self) -> Optional[str]:
         return self.file.hash
 
     @property
