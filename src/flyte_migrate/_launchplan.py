@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import flytekit
 from flyte import TaskEnvironment
@@ -33,7 +33,7 @@ def schedule_to_trigger(
     auto_activate: bool = False,
     labels: Optional[_common_models.Labels] = None,
     annotations: Optional[_common_models.Annotations] = None,
-) -> Trigger:
+) -> Optional[Trigger]:
     if schedule is None:
         return None
     if overwrite_cache is None:
@@ -42,6 +42,7 @@ def schedule_to_trigger(
     annotations = dict(annotations.values.items()) if annotations else None
     inputs = merge_inputs(default_inputs, fixed_inputs)
 
+    automation: Union[FixedRate, Cron]
     if schedule.rate:
         automation = FixedRate(schedule.rate.value)
     elif schedule.cron_expression:
@@ -95,7 +96,7 @@ class LaunchPlanTransformer(object):
                 overwrite_cache=overwrite_cache,
                 auto_activate=auto_activate,
             )
-            if hasattr(task_template, "triggers"):
+            if trigger and hasattr(task_template, "triggers"):
                 task_template.triggers += (trigger,)  # type: ignore[attr-defined]
         return parent_env
 

@@ -66,11 +66,10 @@ def task_shim(
         image_key = str(_transform_image_spec_v1_to_v2(container_image))
         _task_to_env[image_key] = env
         return env.task(
-            _task_function,
             retries=retries,
             report=bool(enable_deck),
             timeout=timeout,  # type: ignore[arg-type,return-value]
-        )
+        )(_task_function)
 
     if _task_function is None:
         return v2_decorator
