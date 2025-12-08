@@ -1,3 +1,4 @@
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -69,3 +70,12 @@ def wf():
     download_file(ff=o2)
     o3 = upload_data()
     download_flyte_types(res=o3)
+
+
+if __name__ == "__main__":
+    import flyte
+
+    flyte.init_from_config(log_level=logging.DEBUG)
+    run = flyte.with_runcontext(mode="remote", log_level=logging.DEBUG).run(wf)
+    print(run.name)
+    print(run.url)
