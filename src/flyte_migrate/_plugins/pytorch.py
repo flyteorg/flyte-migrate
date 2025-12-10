@@ -8,9 +8,7 @@ def _transform_pytorch_config_v1_to_v2(v1_config: Optional[Any]) -> Optional[Any
         from flyteplugins.pytorch.task import RunPolicy as v2RunPolicy
 
     except ModuleNotFoundError as e:
-        raise ModuleNotFoundError(
-            f"\nPyTorch plugin is not installed. \nPlease ensure that {e.name} is installed."
-        ) from e
+        raise ModuleNotFoundError(f"PyTorch plugin is not installed. Please ensure that {e.name} is installed.") from e
 
     if not isinstance(v1_config, v1Elastic):
         return None
