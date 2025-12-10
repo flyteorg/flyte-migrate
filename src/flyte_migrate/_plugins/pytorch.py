@@ -16,8 +16,9 @@ def _transform_pytorch_config_v1_to_v2(v1_config: Optional[Any]) -> Optional[Any
         return None
 
     run_policy = None
-    if v1_config.run_policy is not None:
+    if v1_config.run_policy is not None and v1_config.run_policy.clean_pod_policy is not None:
         run_policy = v2RunPolicy(
+            # flytesdk will capitalize the enum names, so we access the name attribute
             clean_pod_policy=v1_config.run_policy.clean_pod_policy.name,
             ttl_seconds_after_finished=v1_config.run_policy.ttl_seconds_after_finished,
             active_deadline_seconds=v1_config.run_policy.active_deadline_seconds,
