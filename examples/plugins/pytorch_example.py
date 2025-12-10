@@ -1,3 +1,5 @@
+import logging
+import flyte
 import flyte_migrate  # noqa: F401, I001
 
 import os
@@ -136,8 +138,10 @@ def pytorch_training_wf(epochs: int = 5) -> float:
     return (final_loss + evaluation) / 2.0
 
 
-# Local run for testing
 if __name__ == "__main__":
-    print("Running locally...")
-    result = pytorch_training_wf(epochs=5)
-    print("Workflow Result:", result)
+    import flyte
+
+    flyte.init_from_config(log_level=logging.DEBUG)
+    run = flyte.with_runcontext(mode="remote", log_level=logging.DEBUG).run(pytorch_training_wf)
+    print(run.name)
+    print(run.url)
