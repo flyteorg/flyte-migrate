@@ -1,15 +1,13 @@
 import logging
-import flyte
-import flyte_migrate  # noqa: F401, I001
-
 import os
+
+import flyte
 import torch
-from flytekit import FlyteFile, ImageSpec, Resources, task, workflow
+from flytekit import ImageSpec, Resources, task, workflow
 from flytekitplugins.kfpytorch import CleanPodPolicy, Elastic, RunPolicy
 from torch import nn, optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler, TensorDataset
-
 
 # Image with dependencies
 custom_image = ImageSpec(
