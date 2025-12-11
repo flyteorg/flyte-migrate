@@ -9,6 +9,7 @@ from flyte.io import File
 from flyte.io._hashing_io import HashMethod
 from flyte.types import TypeEngine, TypeTransformer, TypeTransformerFailedError
 from flyteidl2.core import literals_pb2, types_pb2
+from fsspec.utils import get_protocol
 from mashumaro.types import SerializableType
 from pydantic import BaseModel, model_validator
 
@@ -22,7 +23,7 @@ def CreateV2File(file: Optional[File[T]] = None, **kwargs) -> File[T]:
     if path is None:
         raise ValueError(f"File not found: {path}")
 
-    if os.path.exists(path):
+    if get_protocol(path) == "file":
         local_path = path
         remote_path = kwargs.get("remote_path", None)
         return File.from_local_sync(local_path=local_path, remote_destination=remote_path)
@@ -33,8 +34,7 @@ def CreateV2File(file: Optional[File[T]] = None, **kwargs) -> File[T]:
 
 class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
     file: File
-    is_download: bool = False
-    local_path: str = ""
+    metadata: typing.Optional[dict[str, str]] = None
 
     def _serialize(self) -> Dict[str, Optional[str]]:
         pyd_dump = self.model_dump()
@@ -48,9 +48,7 @@ class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
     @classmethod
     def pre_init(cls, data: Dict[str, Any]) -> Dict[str, Any]:
         if "file" not in data or data["file"] is None:
-            file_field_candidates = {
-                key: value for key, value in data.items() if key not in {"file", "is_download", "local_path"}
-            }
+            file_field_candidates = {key: value for key, value in data.items() if key not in {"file"}}
 
             if file_field_candidates:
                 for k in file_field_candidates.keys():
@@ -82,14 +80,19 @@ class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
         file: File = File.from_local_sync(local_path=local_path)
         return cls(file=file)
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._is_download = False
+        self._local_path = ""
+
     def download(self) -> str:
         return self.__fspath__()
 
     def __fspath__(self) -> str:
-        if not self.is_download:
-            self.local_path = self.file.download_sync()
-            self.is_download = True
-        return self.local_path
+        if not self._is_download:
+            self._local_path = self.file.download_sync()
+            self._is_download = True
+        return self._local_path
 
     @contextmanager
     def open(
@@ -99,6 +102,37 @@ class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
     ) -> Generator[IO[Any], None, None]:
         with self.file.open_sync(*args, **kwargs) as f:
             yield f
+
+    @property
+    def downloaded(self) -> bool:
+        return self._is_download
+
+    @property
+    def remote_path(self) -> typing.Optional[os.PathLike]:
+        return Path(self.path) if self.path else None
+
+    @property
+    def remote_source(self) -> str:
+        return self.path
+
+    def __eq__(self, other):
+        if isinstance(other, FlyteFileV1ToV2):
+            return (
+                self.path == other.path
+                and self.remote_path == other.remote_path
+                and self.extension() == other.extension()
+            )
+        else:
+            return self.path == other
+
+    def __repr__(self):
+        return self.path
+
+    def __str__(self):
+        return self.path
+
+    def __hash__(self):
+        return hash(str(self.path))
 
     @property
     def path(self) -> str:
@@ -122,19 +156,12 @@ class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
 
 
 class FlyteFilev1Tov2Transformer(TypeTransformer[FlyteFileV1ToV2]):
-    """
-    Transformer for File objects. This type transformer does not handle any i/o. That is now the responsibility of the
-    user.
-    """
-
     def __init__(self):
         super().__init__(name="FlyteFileV1ToV2", t=FlyteFileV1ToV2)
 
     def get_literal_type(self, t: typing.Type[FlyteFileV1ToV2]) -> types_pb2.LiteralType:
-        """Get the Flyte literal type for a File type."""
         return types_pb2.LiteralType(
             blob=types_pb2.BlobType(
-                # todo: set format from generic
                 format="",  # Format is determined by the generic type T
                 dimensionality=types_pb2.BlobType.BlobDimensionality.SINGLE,
             )
@@ -146,7 +173,6 @@ class FlyteFilev1Tov2Transformer(TypeTransformer[FlyteFileV1ToV2]):
         python_type: typing.Type[FlyteFileV1ToV2],
         expected: types_pb2.LiteralType,
     ) -> literals_pb2.Literal:
-        """Convert a File object to a Flyte literal."""
         if not isinstance(python_val, FlyteFileV1ToV2):
             raise TypeTransformerFailedError(f"Expected File object, received {type(python_val)}")
         v2_file = python_val.file
@@ -169,7 +195,6 @@ class FlyteFilev1Tov2Transformer(TypeTransformer[FlyteFileV1ToV2]):
         lv: literals_pb2.Literal,
         expected_python_type: typing.Type[FlyteFileV1ToV2],
     ) -> FlyteFileV1ToV2:
-        """Convert a Flyte literal to a File object."""
         if not lv.scalar.HasField("blob"):
             raise TypeTransformerFailedError(f"Expected blob literal, received {lv}")
         if not lv.scalar.blob.metadata.type.dimensionality == types_pb2.BlobType.BlobDimensionality.SINGLE:
@@ -186,7 +211,6 @@ class FlyteFilev1Tov2Transformer(TypeTransformer[FlyteFileV1ToV2]):
         return f
 
     def guess_python_type(self, literal_type: types_pb2.LiteralType) -> typing.Type[FlyteFileV1ToV2]:
-        """Guess the Python type from a Flyte literal type."""
         if (
             literal_type.HasField("blob")
             and literal_type.blob.dimensionality == types_pb2.BlobType.BlobDimensionality.SINGLE
