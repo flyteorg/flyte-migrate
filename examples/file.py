@@ -1,5 +1,6 @@
 import logging
 import os
+import typing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,12 +27,12 @@ def download_file(ff: fl.FlyteFile):
 
 
 @fl.task(container_image=image)
-def upload_data() -> FlyteTypes:
+def upload_data(remote_path: typing.Optional[str]) -> FlyteTypes:
     path = str(Path(fl.current_context().working_directory) / "data.csv")
     d = {"col1": [0, 1, 2, 3], "col2": pd.Series([2, 3], index=[2, 3])}
     data = pd.DataFrame(data=d, index=[0, 1, 2, 3])
     data.to_csv(path)
-    file = fl.FlyteFile(path=path)
+    file = fl.FlyteFile(path=path, remote_path=remote_path)
     fs = FlyteTypes(file=file)
     return fs
 
@@ -68,7 +69,7 @@ def wf():
     o1 = load_csv()
     o2 = remove_some_rows(ff=o1)
     download_file(ff=o2)
-    o3 = upload_data()
+    o3 = upload_data(remote_path=None)
     download_flyte_types(res=o3)
 
 

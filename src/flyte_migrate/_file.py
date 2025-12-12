@@ -34,7 +34,6 @@ def CreateV2File(file: Optional[File[T]] = None, **kwargs) -> File[T]:
 
 class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
     file: File
-    metadata: typing.Optional[dict[str, str]] = None
 
     def _serialize(self) -> Dict[str, Optional[str]]:
         pyd_dump = self.model_dump()
