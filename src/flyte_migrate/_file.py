@@ -73,6 +73,40 @@ class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
         return cls(file=file)
 
     @classmethod
+    def extension(cls) -> str:
+        return ""
+
+    def __class_getitem__(cls, item: Any) -> typing.Type["FlyteFileV1ToV2"]:
+        from flytekit.types.file import FileExt
+
+        if item is None:
+            return cls
+
+        item_string = FileExt.check_and_convert_to_str(item)
+
+        item_string = item_string.strip().lstrip("~").lstrip(".")
+        if item == "":
+            return cls
+
+        class _SpecificFormatClass(FlyteFileV1ToV2):
+            __origin__ = FlyteFileV1ToV2
+
+            class AttributeHider:
+                def __get__(self, instance, owner):
+                    raise AttributeError(
+                        """We have to return false in hasattr(cls, "__class_getitem__")
+                         to make mashumaro deserialize FlyteFile correctly."""
+                    )
+
+            __class_getitem__ = AttributeHider()  # type: ignore
+
+            @classmethod
+            def extension(cls) -> str:
+                return item_string
+
+        return _SpecificFormatClass
+
+    @classmethod
     def new(cls, filename: str | os.PathLike) -> "FlyteFileV1ToV2":
         if isinstance(filename, os.PathLike):
             local_path = Path(filename)

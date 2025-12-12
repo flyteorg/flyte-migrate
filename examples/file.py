@@ -6,6 +6,7 @@ from pathlib import Path
 
 import flytekit as fl
 import pandas as pd
+from flytekit.types.file import FileExt
 
 import flyte_migrate  # noqa: F401
 
@@ -49,13 +50,15 @@ def download_flyte_types(res: FlyteTypes):
 
 @fl.task(container_image=image)
 def load_csv(uri: str = "https://people.sc.fsu.edu/~jburkardt/data/csv/addresses.csv") -> fl.FlyteFile:
-    my_csv = fl.FlyteFile.from_source(uri)
+    my_csv = fl.FlyteFile[typing.Annotated[str, FileExt("csv")]].from_source(uri)
+    print(type(my_csv).extension())
     return my_csv
 
 
 @fl.task(container_image=image)
 def remove_some_rows(ff: fl.FlyteFile) -> fl.FlyteFile:
-    new_file = fl.FlyteFile.new_remote_file("data_without_nan.csv")
+    new_file = fl.FlyteFile[typing.TypeVar("csv")].new_remote_file("data_without_nan.csv")
+    print(type(new_file).extension())
     with ff.open("r") as r:
         with new_file.open("w") as w:
             df = pd.read_csv(r)
