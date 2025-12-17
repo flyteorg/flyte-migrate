@@ -27,7 +27,7 @@ def _transform_resource_v1_to_v2(
         selected_resources = _merge_flytekit_requests_and_limits_to_resources(requests, limits)
 
     # Parse GPU
-    gpu = None
+    gpu: Optional[Union[str, int]] = None
     if accelerator:
         if selected_resources.gpu:
             gpu = f"{accelerator}:{selected_resources.gpu}"
@@ -36,12 +36,19 @@ def _transform_resource_v1_to_v2(
     elif selected_resources.gpu:
         gpu = str(selected_resources.gpu)
 
+    # Parse shared memory
+    shm_value: Optional[Union[str, Literal["auto"]]] = None
+    if shared_memory is True:
+        shm_value = "auto"
+    elif isinstance(shared_memory, str):
+        shm_value = shared_memory
+
     return flyte.Resources(
         cpu=selected_resources.cpu,
         memory=selected_resources.mem,
-        gpu=gpu,
+        gpu=gpu,  # type: ignore[arg-type]
         disk=selected_resources.ephemeral_storage,
-        shm=shared_memory,
+        shm=shm_value,
     )
 
 
