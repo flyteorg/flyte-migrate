@@ -1,4 +1,3 @@
-import flyte_migrate
 import logging
 
 import flyte
@@ -20,14 +19,16 @@ image_spec = _transform_image_spec_v1_to_v2(
         # registry="your_registry",
         # pip_secret_mounts = [("path/in/container", "path/on/host"),("another/container/path", "another/host/path")],
         # requirements="requirements.txt",
-    ))
+    )
+)
+
 
 @task(container_image=image_spec)
 def my_task():
     print(f"Image Type: {type(image_spec)}")
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     import flyte
 
     flyte.init_from_config(log_level=logging.DEBUG)

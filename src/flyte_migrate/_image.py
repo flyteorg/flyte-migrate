@@ -15,7 +15,7 @@ _package_v1_to_v2: Dict[str, str] = {
 }
 
 
-def _extract_attributes(parent, child):
+def _extract_attributes(parent: flytekit.ImageSpec, child: flytekit.ImageSpec) -> None:
     if child.apt_packages:
         if not parent.apt_packages:
             parent.apt_packages = []
