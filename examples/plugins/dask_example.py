@@ -1,9 +1,8 @@
 import flyte_migrate  # noqa: F401, I001
 import logging
-import typing
 
 from dask import array as da
-from flytekit import task, workflow, ImageSpec, Resources
+from flytekit import task, ImageSpec, Resources
 from flytekitplugins.dask import Dask, WorkerGroup
 
 custom_image = ImageSpec(python_version="3.10", packages=["flytekitplugins-dask", "numpy"])
@@ -28,6 +27,7 @@ def hello_dask(size: int) -> float:
     # When running remotely, the Client() function will utilize the deployed Dask cluster.
     array = da.random.random(size)
     return float(array.mean().compute())
+
 
 if __name__ == "__main__":
     import flyte
