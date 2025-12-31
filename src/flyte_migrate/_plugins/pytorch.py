@@ -16,7 +16,7 @@ def _transform_pytorch_config_v1_to_v2(v1_config: Optional[Any]) -> Optional[Any
     run_policy = None
     if v1_config.run_policy is not None and v1_config.run_policy.clean_pod_policy is not None:
         run_policy = v2RunPolicy(
-            # NOTE: While V2 expects lowercase (e.g., 'all'), we can use V1 Enums (e.g., 'ALL') here 
+            # NOTE: While V2 expects lowercase (e.g., 'all'), we can use V1 Enums (e.g., 'ALL') here
             # as flyte-sdk capitalizes the policy value at runtime.
             # Ref: https://github.com/flyteorg/flyte-sdk/blob/2863eb460ac31cf05bab994346c4221a143ba38c/plugins/pytorch/src/flyteplugins/pytorch/task.py#L171
             clean_pod_policy=v1_config.run_policy.clean_pod_policy.name,
