@@ -7,8 +7,8 @@ def _transform_spark_config_v1_to_v2(v1_config: Optional[Any]) -> Optional[Any]:
     try:
         from flytekitplugins.spark import Spark as v1Spark
         from flyteplugins.spark.task import Spark as v2Spark
-    except ModuleNotFoundError:
-        return None
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(f"Spark plugin is not installed. Please ensure that {e.name} is installed.") from e
 
     if not isinstance(v1_config, v1Spark):
         return None

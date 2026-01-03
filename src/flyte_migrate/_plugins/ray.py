@@ -10,8 +10,8 @@ def _transform_ray_config_v1_to_v2(v1_config: Optional[Any]) -> Optional[Any]:
         from flyteplugins.ray.task import HeadNodeConfig as v2HeadNodeConfig
         from flyteplugins.ray.task import RayJobConfig as v2RayConfig
         from flyteplugins.ray.task import WorkerNodeConfig as v2WorkerNodeConfig
-    except ModuleNotFoundError:
-        return None
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(f"Ray plugin is not installed. Please ensure that {e.name} is installed.") from e
 
     if not isinstance(v1_config, v1RayConfig):
         return None
