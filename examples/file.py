@@ -51,14 +51,12 @@ def download_flyte_types(res: FlyteTypes):
 @fl.task(container_image=image)
 def load_csv(uri: str = "https://people.sc.fsu.edu/~jburkardt/data/csv/addresses.csv") -> fl.FlyteFile:
     my_csv = fl.FlyteFile[typing.Annotated[str, FileExt("csv")]].from_source(uri)
-    print(type(my_csv).extension())
     return my_csv
 
 
 @fl.task(container_image=image)
 def remove_some_rows(ff: fl.FlyteFile) -> fl.FlyteFile:
     new_file = fl.FlyteFile[typing.TypeVar("csv")].new_remote_file("data_without_nan.csv")
-    print(type(new_file).extension())
     with ff.open("r") as r:
         with new_file.open("w") as w:
             df = pd.read_csv(r)
@@ -69,17 +67,48 @@ def remove_some_rows(ff: fl.FlyteFile) -> fl.FlyteFile:
 
 @fl.workflow()
 def wf():
-    o1 = load_csv()
+    uri = "https://people.sc.fsu.edu/~jburkardt/data/csv/addresses.csv"
+    o1 = load_csv(uri=uri)
     o2 = remove_some_rows(ff=o1)
     download_file(ff=o2)
     o3 = upload_data(remote_path=None)
     download_flyte_types(res=o3)
 
 
+@fl.task(container_image=image)
+def check_src(f1: fl.FlyteFile, f2: typing.Union[str, fl.FlyteFile]) -> bool:
+    expected_uri = f2 if isinstance(f2, str) else str(f2)
+    return str(f1) == expected_uri
+
+
+@fl.workflow()
+def check_file_property_wf():
+    """
+    File one is same with file 2 from s3 or external uri?
+    1. Local
+    res1 is True where o1 and uri are from people.sc.fsu.edu.
+    res2 is False where o1 and o2 are from different local path
+    2. Online
+    res1 is False because o1 is from s3 uri instead of people.sc.fsu.edu.
+    res2 is False where o1 and o2 are from different s3 uri path.
+    """
+    uri = "https://people.sc.fsu.edu/~jburkardt/data/csv/addresses.csv"
+    o1 = load_csv(uri=uri)
+    res1 = check_src(o1, uri)
+    print(res1)
+    o2 = remove_some_rows(ff=o1)
+    res2 = check_src(o1, str(o2))
+    print(res2)
+
+
 if __name__ == "__main__":
     import flyte
 
     flyte.init_from_config(log_level=logging.DEBUG)
-    run = flyte.with_runcontext(mode="remote", log_level=logging.DEBUG).run(wf)
+    context = flyte.with_runcontext(mode="remote", log_level=logging.DEBUG)
+    run = context.run(wf)
+    print(run.name)
+    print(run.url)
+    run = context.run(check_file_property_wf)
     print(run.name)
     print(run.url)
