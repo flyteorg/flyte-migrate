@@ -36,12 +36,12 @@ class FlyteFileV1ToV2(BaseModel, Generic[T], SerializableType):
     file: File
 
     def _serialize(self) -> Dict[str, Optional[str]]:
-        pyd_dump = self.model_dump()
-        return pyd_dump
+        return self.file.model_dump()
 
     @classmethod
     def _deserialize(cls, file_dump: Dict[str, Optional[str]]) -> "FlyteFileV1ToV2":
-        return FlyteFileV1ToV2.model_validate(file_dump)
+        file: File = File.model_validate(file_dump)
+        return cls(file=CreateV2File(file))
 
     @model_validator(mode="before")
     @classmethod
