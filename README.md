@@ -85,6 +85,33 @@ Done! No other changes needed.
 
 ## Examples
 
+The `examples/` directory contains runnable examples demonstrating various v1 API patterns. Each example can be run directly:
+
+```bash
+python examples/hello.py
+```
+
+### Core Examples
+
+| Example | File | v1 APIs Demonstrated |
+|---------|------|---------------------|
+| Hello World | [`examples/hello.py`](examples/hello.py) | `@task`, `@workflow`, `@dynamic`, `ImageSpec`, `cache`, `retries` |
+| Map Task | [`examples/map_task.py`](examples/map_task.py) | `map_task`, `functools.partial` |
+| File I/O | [`examples/file_io_example.py`](examples/file_io_example.py) | `FlyteFile`, `FlyteDirectory` |
+| Complex Types | [`examples/complex_types_example.py`](examples/complex_types_example.py) | `@dataclass` types, `List` types, nested dataclasses |
+| Conditionals | [`examples/conditional_example.py`](examples/conditional_example.py) | `conditional`, `.if_()`, `.else_()`, `.is_true()` |
+| Nested Workflows | [`examples/nested_workflow_example.py`](examples/nested_workflow_example.py) | Workflow composition (workflow calling workflow) |
+| Error Handling | [`examples/error_handling_example.py`](examples/error_handling_example.py) | `retries`, `timeout`, error patterns |
+| Secrets | [`examples/secret_example.py`](examples/secret_example.py) | `Secret`, `MountType.FILE`, `env_var` |
+| Launch Plans | [`examples/launchplan_example.py`](examples/launchplan_example.py) | `LaunchPlan`, `fixed_inputs`, `default_inputs` |
+
+### Plugin Examples
+
+| Example | File | v1 APIs Demonstrated |
+|---------|------|---------------------|
+| Ray | [`examples/plugins/ray_example.py`](examples/plugins/ray_example.py) | `RayJobConfig`, `WorkerNodeConfig`, `Resources` |
+| Spark | [`examples/plugins/spark_example.py`](examples/plugins/spark_example.py) | `Spark` plugin config, `spark_session` context |
+
 ### Basic Task
 
 ```python
@@ -101,54 +128,129 @@ def hello_workflow(name: str):
     say_hello(name=name)
 ```
 
-### Map Task
+### File I/O with FlyteFile
 
 ```python
 import flyte_migrate  # noqa: F401, I001
-import functools
 
-from flytekit import map_task, task, workflow
+from flytekit import task, workflow
+from flytekit.types.file import FlyteFile
 
 @task
-def calculate_price(quantity: int, price: float, shipping: float) -> float:
-    return quantity * price * shipping
+def write_data(data: str) -> FlyteFile:
+    with open("/tmp/output.csv", "w") as f:
+        f.write(data)
+    return FlyteFile("/tmp/output.csv")
+
+@task
+def read_data(ff: FlyteFile) -> str:
+    with open(ff, "r") as f:
+        return f.read()
 
 @workflow
-def batch_pricing(quantities: list[int], price: float, shipping: float) -> list[float]:
-    partial_task = functools.partial(calculate_price, price=price, shipping=shipping)
-    return map_task(partial_task)(quantities)
+def file_wf(data: str = "hello") -> str:
+    ff = write_data(data=data)
+    return read_data(ff=ff)
 ```
 
-### Ray Plugin
+### Conditional Workflow
 
 ```python
 import flyte_migrate  # noqa: F401, I001
 
-import ray
-from flytekit import task, workflow, Resources, ImageSpec
-from flytekitplugins.ray import RayJobConfig, WorkerNodeConfig
+from flytekit import conditional, task, workflow
 
-image = ImageSpec(packages=["flytekitplugins-ray"])
+@task
+def is_positive(n: float) -> bool:
+    return n > 0
 
-@ray.remote
-def compute(x):
-    return x * x
+@task
+def square(n: float) -> float:
+    return n * n
 
-@task(
-    task_config=RayJobConfig(
-        worker_node_config=[WorkerNodeConfig(group_name="workers", replicas=2)]
-    ),
-    limits=Resources(mem="2Gi"),
-    container_image=image,
-)
-def ray_task() -> list[int]:
-    futures = [compute.remote(i) for i in range(10)]
-    return ray.get(futures)
+@task
+def double(n: float) -> float:
+    return n * 2
 
 @workflow
-def ray_workflow() -> list[int]:
-    return ray_task()
+def conditional_wf(n: float) -> float:
+    return (
+        conditional("check")
+        .if_(is_positive(n=n).is_true())
+        .then(square(n=n))
+        .else_()
+        .then(double(n=n))
+    )
 ```
+
+### Nested Workflows
+
+```python
+import flyte_migrate  # noqa: F401, I001
+
+from flytekit import task, workflow
+
+@task
+def compute_mean(data: list[float]) -> float:
+    return sum(data) / len(data)
+
+@workflow
+def analyze(source: str) -> float:
+    data = fetch_data(source=source)
+    return compute_mean(data=data)
+
+@workflow
+def parent_wf() -> str:
+    mean_a = analyze(source="sensor_a")
+    mean_b = analyze(source="sensor_b")
+    return combine(mean_a=mean_a, mean_b=mean_b)
+```
+
+## API Coverage
+
+### Supported v1 APIs
+
+| Category | API | Status | Example |
+|----------|-----|--------|---------|
+| **Decorators** | `@task` | Supported | `hello.py` |
+| | `@workflow` | Supported | `hello.py` |
+| | `@dynamic` | Supported | `hello.py` |
+| **Task Config** | `cache` / `cache_version` | Supported | `hello.py` |
+| | `retries` | Supported | `error_handling_example.py` |
+| | `timeout` | Supported | `error_handling_example.py` |
+| | `interruptible` | Supported | - |
+| | `container_image` | Supported | `hello.py` |
+| | `secret_requests` | Supported | `secret_example.py` |
+| | `environment` | Supported | - |
+| **Resources** | `Resources` (cpu, mem, gpu) | Supported | `ray_example.py` |
+| | `requests` / `limits` | Supported | `ray_example.py` |
+| | `accelerator` | Supported | - |
+| | `shared_memory` | Supported | - |
+| **Images** | `ImageSpec` | Supported | `hello.py` |
+| | `base_image` | Supported | `spark_example.py` |
+| | `apt_packages` / `packages` | Supported | `hello.py` |
+| **Types** | `FlyteFile` | Supported | `file_io_example.py` |
+| | `FlyteDirectory` | Supported | `file_io_example.py` |
+| | `@dataclass` | Supported | `complex_types_example.py` |
+| | `List`, `Tuple`, primitives | Supported | Various |
+| **Patterns** | `map_task` | Supported | `map_task.py` |
+| | `conditional` | Supported | `conditional_example.py` |
+| | `LaunchPlan` | Supported | `launchplan_example.py` |
+| | Nested workflows | Supported | `nested_workflow_example.py` |
+| **Plugins** | Ray (`RayJobConfig`) | Supported | `ray_example.py` |
+| | Spark (`Spark`) | Supported | `spark_example.py` |
+| **Context** | `current_context()` | Supported | `spark_example.py` |
+| | `spark_session` | Supported | `spark_example.py` |
+
+### Not Yet Supported
+
+| API | Notes |
+|-----|-------|
+| `PodTemplate` | Stubbed (returns None) |
+| `reference_task` / `reference_workflow` | Not yet implemented |
+| `ContainerTask` | Not yet implemented |
+| `approve` / `wait_for_input` | Not yet implemented |
+| `StructuredDataset` | Not yet tested |
 
 ## How it works
 
