@@ -31,20 +31,20 @@ def greeting_wf(name: str = "World", greeting: str = "Hello", uppercase: bool = 
     return result
 
 
-# LaunchPlan with fixed inputs - always greets in uppercase
-loud_greeting = LaunchPlan.get_or_create(
-    workflow=greeting_wf,
-    name="loud_greeting",
-    fixed_inputs={"uppercase": True},
-    default_inputs={"greeting": "Hey"},
-)
-
-# LaunchPlan with default inputs - can be overridden
-formal_greeting = LaunchPlan.get_or_create(
-    workflow=greeting_wf,
-    name="formal_greeting",
-    default_inputs={"greeting": "Good day", "uppercase": False},
-)
+# Note: LaunchPlan.get_or_create is not yet fully supported with flyte-migrate.
+# The LaunchPlan API is being shimmed. For now, use the workflow directly with
+# different input parameters.
+#
+# In v1, you would create LaunchPlans like this:
+# loud_greeting = LaunchPlan.get_or_create(
+#     workflow=greeting_wf,
+#     name="loud_greeting",
+#     fixed_inputs={"uppercase": True},
+#     default_inputs={"greeting": "Hey"},
+# )
+#
+# For now, just call the workflow with the desired inputs:
+# flyte.with_runcontext(mode="remote").run(greeting_wf, name="World", greeting="Hey", uppercase=True)
 
 
 if __name__ == "__main__":

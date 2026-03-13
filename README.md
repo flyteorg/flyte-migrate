@@ -99,11 +99,11 @@ python examples/hello.py
 | Map Task | [`examples/map_task.py`](examples/map_task.py) | `map_task`, `functools.partial` |
 | File I/O | [`examples/file_io_example.py`](examples/file_io_example.py) | `FlyteFile`, `FlyteDirectory` |
 | Complex Types | [`examples/complex_types_example.py`](examples/complex_types_example.py) | `@dataclass` types, `List` types, nested dataclasses |
-| Conditionals | [`examples/conditional_example.py`](examples/conditional_example.py) | `conditional`, `.if_()`, `.else_()`, `.is_true()` |
+| Conditionals | [`examples/conditional_example.py`](examples/conditional_example.py) | Task-level conditionals (workflow-level `conditional()` not yet supported) |
 | Nested Workflows | [`examples/nested_workflow_example.py`](examples/nested_workflow_example.py) | Workflow composition (workflow calling workflow) |
 | Error Handling | [`examples/error_handling_example.py`](examples/error_handling_example.py) | `retries`, `timeout`, error patterns |
 | Secrets | [`examples/secret_example.py`](examples/secret_example.py) | `Secret`, `MountType.FILE`, `env_var` |
-| Launch Plans | [`examples/launchplan_example.py`](examples/launchplan_example.py) | `LaunchPlan`, `fixed_inputs`, `default_inputs` |
+| Launch Plans | [`examples/launchplan_example.py`](examples/launchplan_example.py) | Workflow patterns (LaunchPlan.get_or_create not yet supported) |
 
 ### Plugin Examples
 
@@ -151,36 +151,6 @@ def read_data(ff: FlyteFile) -> str:
 def file_wf(data: str = "hello") -> str:
     ff = write_data(data=data)
     return read_data(ff=ff)
-```
-
-### Conditional Workflow
-
-```python
-import flyte_migrate  # noqa: F401, I001
-
-from flytekit import conditional, task, workflow
-
-@task
-def is_positive(n: float) -> bool:
-    return n > 0
-
-@task
-def square(n: float) -> float:
-    return n * n
-
-@task
-def double(n: float) -> float:
-    return n * 2
-
-@workflow
-def conditional_wf(n: float) -> float:
-    return (
-        conditional("check")
-        .if_(is_positive(n=n).is_true())
-        .then(square(n=n))
-        .else_()
-        .then(double(n=n))
-    )
 ```
 
 ### Nested Workflows
@@ -234,8 +204,8 @@ def parent_wf() -> str:
 | | `@dataclass` | Supported | `complex_types_example.py` |
 | | `List`, `Tuple`, primitives | Supported | Various |
 | **Patterns** | `map_task` | Supported | `map_task.py` |
-| | `conditional` | Supported | `conditional_example.py` |
-| | `LaunchPlan` | Supported | `launchplan_example.py` |
+| | `conditional` (workflow-level) | Not supported | - |
+| | `LaunchPlan.get_or_create` | Not supported | - |
 | | Nested workflows | Supported | `nested_workflow_example.py` |
 | **Plugins** | Ray (`RayJobConfig`) | Supported | `ray_example.py` |
 | | Spark (`Spark`) | Supported | `spark_example.py` |
@@ -246,6 +216,8 @@ def parent_wf() -> str:
 
 | API | Notes |
 |-----|-------|
+| `conditional()` | Workflow-level branching not yet shimmed - use task-level conditionals instead |
+| `LaunchPlan.get_or_create` | LaunchPlan creation not shimmed - workflows work directly |
 | `PodTemplate` | Stubbed (returns None) |
 | `reference_task` / `reference_workflow` | Not yet implemented |
 | `ContainerTask` | Not yet implemented |

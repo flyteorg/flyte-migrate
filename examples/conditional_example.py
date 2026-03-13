@@ -1,7 +1,7 @@
 import flyte_migrate  # noqa: F401, I001
 import logging
 
-from flytekit import conditional, task, workflow
+from flytekit import task, workflow
 
 
 @task
@@ -28,40 +28,45 @@ def negate(n: float) -> float:
     return -n
 
 
+@task
+def conditional_logic(n: float) -> float:
+    """
+    Simple conditional logic within a task.
+
+    Note: flytekit.conditional() for workflow-level branching is not yet
+    supported in flyte-migrate. For now, use conditionals within tasks.
+    """
+    if n > 0:
+        return n * n
+    else:
+        return n * 2
+
+
 @workflow
 def conditional_wf(n: float = 3.0) -> float:
     """
-    Demonstrates conditional branching in workflows.
+    Demonstrates conditional logic in workflows.
 
-    If n > 0, square it. Otherwise, double it.
-    Uses flytekit.conditional for branching logic.
+    Note: flytekit.conditional() workflow branching is not yet supported.
+    This example shows task-level conditionals instead.
     """
-    result = (
-        conditional("positive_check")
-        .if_(is_positive(n=n).is_true())
-        .then(calculate_square(n=n))
-        .else_()
-        .then(calculate_double(n=n))
-    )
+    result = conditional_logic(n=n)
     return result
 
 
-@workflow
-def multi_branch_wf(n: float = 5.0) -> float:
-    """
-    Demonstrates multi-branch conditional logic.
-
-    If n > 0, square it. If n == 0, return 0. Otherwise, negate and double.
-    """
-    pos = is_positive(n=n)
-    result = (
-        conditional("multi_check")
-        .if_(pos.is_true())
-        .then(calculate_square(n=n))
-        .else_()
-        .then(calculate_double(n=negate(n=n)))
-    )
-    return result
+# V1 conditional API example (not yet supported):
+# from flytekit import conditional
+#
+# @workflow
+# def conditional_wf_v1(n: float = 3.0) -> float:
+#     result = (
+#         conditional("positive_check")
+#         .if_(is_positive(n=n).is_true())
+#         .then(calculate_square(n=n))
+#         .else_()
+#         .then(calculate_double(n=n))
+#     )
+#     return result
 
 
 if __name__ == "__main__":
