@@ -4,7 +4,7 @@ import logging
 from operator import add
 
 import flytekit
-from flytekit import ImageSpec, Resources, task, workflow
+from flytekit import ImageSpec, PodTemplate, Resources, task, workflow
 from flytekitplugins.spark import Spark
 
 
@@ -50,6 +50,72 @@ def hello_spark(partitions: int = 3) -> float:
 
 
 @task(
+    task_config=Spark(
+        spark_conf={
+            "spark.driver.memory": "2g",
+            "spark.executor.memory": "2g",
+            "spark.executor.cores": "2",
+            "spark.executor.instances": "3",
+            "spark.sql.shuffle.partitions": "200",
+            "spark.sql.adaptive.enabled": "true",
+            "spark.serializer": "org.apache.spark.serializer.KryoSerializer",
+        },
+        hadoop_conf={
+            "fs.s3a.access.key": "MY_ACCESS_KEY",
+            "fs.s3a.secret.key": "MY_SECRET_KEY",
+            "fs.s3a.endpoint": "s3.amazonaws.com",
+            "fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+        },
+    ),
+    limits=Resources(mem="4Gi"),
+    container_image=custom_image,
+)
+def spark_with_hadoop_conf(size: int = 100) -> float:
+    """Spark task demonstrating hadoop_conf for S3 access."""
+    session = flytekit.current_context().spark_session
+
+    # Define helper inside the task to avoid pickling module-level imports
+    def compute_sum(x):
+        return x * x
+
+    rdd = session.sparkContext.parallelize(range(size))
+    total = rdd.map(compute_sum).reduce(lambda a, b: a + b)
+    return float(total)
+
+
+@task(
+    task_config=Spark(
+        spark_conf={
+            "spark.driver.memory": "1g",
+            "spark.executor.memory": "1g",
+            "spark.executor.instances": "1",
+        },
+        driver_pod=PodTemplate(
+            primary_container_name="spark-driver",
+            labels={"role": "driver", "app": "flyte-spark"},
+            annotations={"driver-note": "custom-driver-pod"},
+        ),
+        executor_pod=PodTemplate(
+            primary_container_name="spark-executor",
+            labels={"role": "executor", "app": "flyte-spark"},
+            annotations={"executor-note": "custom-executor-pod"},
+        ),
+    ),
+    limits=Resources(mem="2Gi"),
+    container_image=custom_image,
+)
+def spark_with_pod_templates(n: int = 10) -> int:
+    """Spark task demonstrating driver_pod and executor_pod templates."""
+    session = flytekit.current_context().spark_session
+
+    def identity(x):
+        return x
+
+    total = session.sparkContext.parallelize(range(n)).map(identity).reduce(lambda a, b: a + b)
+    return total
+
+
+@task(
     cache_version="2",
     container_image=custom_image,
 )
@@ -66,6 +132,8 @@ def my_spark(triggered_date: datetime.datetime = datetime.datetime.now()) -> flo
     """
     pi = hello_spark(partitions=1)
     print_every_time(value_to_print=pi, date_triggered=triggered_date)
+    spark_with_hadoop_conf(size=50)
+    spark_with_pod_templates(n=10)
     return pi
 
 
