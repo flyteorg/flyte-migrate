@@ -222,13 +222,14 @@ class TestTranslatePipPackages:
         result = _translate_pip_packages(["pandas", "numpy"])
         assert result == ["flytekit", "pandas", "numpy"]
 
-    def test_plugin_translation(self):
+    def test_plugin_translation_includes_both(self):
+        """v2 package is added alongside v1 so remote containers can resolve v1 imports."""
         result = _translate_pip_packages(["flytekitplugins-spark", "pandas"])
-        assert result == ["flytekit", "flyteplugins-spark", "pandas"]
+        assert result == ["flytekit", "flyteplugins-spark", "flytekitplugins-spark", "pandas"]
 
     def test_plugin_with_version_specifier(self):
         result = _translate_pip_packages(["flytekitplugins-spark==1.16.3", "pandas>=2.0"])
-        assert result == ["flytekit", "flyteplugins-spark", "pandas>=2.0"]
+        assert result == ["flytekit", "flyteplugins-spark", "flytekitplugins-spark==1.16.3", "pandas>=2.0"]
 
     def test_plugin_with_various_specifiers(self):
         result = _translate_pip_packages(
@@ -238,11 +239,23 @@ class TestTranslatePipPackages:
                 "flytekitplugins-dask~=1.2",
             ]
         )
-        assert result == ["flytekit", "flyteplugins-pytorch", "flyteplugins-ray", "flyteplugins-dask"]
+        assert result == [
+            "flytekit",
+            "flyteplugins-pytorch",
+            "flytekitplugins-kfpytorch>=1.0,<2.0",
+            "flyteplugins-ray",
+            "flytekitplugins-ray!=0.5",
+            "flyteplugins-dask",
+            "flytekitplugins-dask~=1.2",
+        ]
 
-    def test_all_known_plugins(self):
+    def test_all_known_plugins_includes_both(self):
+        """Each v1 plugin produces both the v2 name and the original v1 name."""
         result = _translate_pip_packages(list(_PACKAGE_V1_TO_V2.keys()))
-        assert result == ["flytekit", *list(_PACKAGE_V1_TO_V2.values())]
+        expected = ["flytekit"]
+        for v1, v2 in _PACKAGE_V1_TO_V2.items():
+            expected.extend([v2, v1])
+        assert result == expected
 
 
 class TestBuildPipSecretMounts:

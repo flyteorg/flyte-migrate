@@ -59,10 +59,11 @@ def _strip_version_specifier(pkg: str) -> Tuple[str, str]:
 def _translate_pip_packages(packages: Optional[List[str]]) -> List[str]:
     """Translate v1 pip package names to v2 equivalents.
 
-    Always includes ``flytekit`` as a base dependency. Plugin package names
-    listed in :data:`_PACKAGE_V1_TO_V2` are replaced with their v2 counterparts.
-    Version specifiers (e.g. ``==1.16.3``) are stripped before lookup and
-    discarded — v2 packages use their own versioning.
+    Always includes ``flytekit`` as a base dependency. When a v1 plugin package
+    is found in :data:`_PACKAGE_V1_TO_V2`, both the v2 equivalent and the
+    original v1 package are included — the v2 package is needed by the runtime
+    and the v1 package is needed so remote containers can resolve v1 imports.
+    Version specifiers are stripped before lookup but preserved on the original.
     """
     translated = ["flytekit"]
     for pkg in packages or []:
