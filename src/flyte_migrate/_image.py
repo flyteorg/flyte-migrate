@@ -219,6 +219,12 @@ def _apply_image_layers(
         if mirror_to_parent:
             parent_image = parent_image.with_source_folder(path, copy_contents_only=True)
 
+    # unsupported conda
+    if spec.conda_packages:
+        logger.warning("conda_packages not supported in v2, ignoring: %s", spec.conda_packages)
+    if spec.conda_channels:
+        logger.warning("conda_channels not supported in v2, ignoring: %s", spec.conda_channels)
+
     # unsupported builders
     if spec.builder in {"envd", "noop"}:
         logger.warning("envd/noop builder not supported in v2, ignoring")

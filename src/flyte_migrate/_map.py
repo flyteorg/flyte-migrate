@@ -8,9 +8,10 @@ class MapShim:
     """Shim that wraps ``flyte.map()`` to provide a v1-compatible ``map_task`` interface.
 
     In FlyteKit v1, ``map_task`` accepted concurrency, min_successes, and
-    min_success_ratio parameters.  This shim accepts those parameters for
-    API compatibility but delegates to ``flyte.map()`` which does not yet
-    support them.
+    min_success_ratio parameters.  This shim forwards ``concurrency`` to
+    ``flyte.map()`` (which supports it natively) and accepts ``min_successes``
+    and ``min_success_ratio`` for API compatibility without forwarding them
+    (v2 does not support these parameters).
     """
 
     def __init__(
@@ -26,7 +27,7 @@ class MapShim:
         **kwargs: Any,
     ) -> None:
         self.target = target
-        # TODO: concurrency is accepted for v1 API compat but not forwarded to flyte.map() yet.
+        # concurrency is forwarded to flyte.map() which supports it as ``concurrency: int = 0``.
         self.concurrency = concurrency
         # TODO: min_successes is accepted for v1 API compat but not forwarded to flyte.map() yet.
         self.min_successes = min_successes
@@ -40,10 +41,16 @@ class MapShim:
         Positional arguments are passed directly to ``flyte.map()``.  When only
         keyword arguments are supplied, their values are unpacked as positional
         arguments (matching v1 ``map_task`` calling convention).
+
+        The ``concurrency`` parameter is forwarded to ``flyte.map()`` when set.
         """
+        map_kwargs: dict[str, Any] = {}
+        if self.concurrency is not None:
+            map_kwargs["concurrency"] = self.concurrency
+
         if args:
-            return list(flyte.map(self.target, *args))
-        return list(flyte.map(self.target, *kwargs.values()))
+            return list(flyte.map(self.target, *args, **map_kwargs))
+        return list(flyte.map(self.target, *kwargs.values(), **map_kwargs))
 
 
 flytekit.map_task = MapShim

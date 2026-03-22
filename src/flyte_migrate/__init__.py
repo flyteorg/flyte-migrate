@@ -15,6 +15,7 @@ from flyte_migrate import (  # noqa: F401
     _launchplan,
     _map,
     _pod_template,
+    _reference,
     _task,
     _workflow,
 )
