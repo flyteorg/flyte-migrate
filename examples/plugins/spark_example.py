@@ -1,7 +1,6 @@
 import flyte_migrate  # noqa: F401, I001
 import datetime
 import logging
-import random
 from operator import add
 
 import flytekit
@@ -31,21 +30,23 @@ custom_image = ImageSpec(
 )
 def hello_spark(partitions: int = 3) -> float:
     session = flytekit.current_context().spark_session
-    print("spark version", session.version)  # spark version 3.5.3
+    print("spark version", session.version)
     print("Starting Spark with Partitions: {}".format(partitions))
 
+    # Define f inside the task so Spark executors don't need to import the
+    # top-level module (which requires flyte_migrate, not available remotely).
+    def f(_):
+        import random
+
+        x = random.random() * 2 - 1
+        y = random.random() * 2 - 1
+        return 1 if x**2 + y**2 <= 1 else 0
+
     n = 1 * partitions
-    sess = flytekit.current_context().spark_session
-    count = sess.sparkContext.parallelize(range(1, n + 1), partitions).map(f).reduce(add)
+    count = session.sparkContext.parallelize(range(1, n + 1), partitions).map(f).reduce(add)
 
     pi_val = 4.0 * count / n
     return pi_val
-
-
-def f(_):
-    x = random.random() * 2 - 1
-    y = random.random() * 2 - 1
-    return 1 if x**2 + y**2 <= 1 else 0
 
 
 @task(

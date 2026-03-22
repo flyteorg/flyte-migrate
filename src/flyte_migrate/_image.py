@@ -68,9 +68,7 @@ def _translate_pip_packages(packages: Optional[List[str]]) -> List[str]:
     for pkg in packages or []:
         name, _version = _strip_version_specifier(pkg)
         v2_name = _PACKAGE_V1_TO_V2.get(name)
-        if v2_name:
-            translated.append(v2_name)
-        translated.append(pkg)
+        translated.append(v2_name or pkg)
     return translated
 
 
