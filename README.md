@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/flyteorg/flyte/master/rsts/docs/images/flyte_circle_gradient_1_4x4.png" alt="Flyte Logo" width="100">
-</p>
-
 <h1 align="center">flyte-migrate</h1>
 
 <p align="center">
