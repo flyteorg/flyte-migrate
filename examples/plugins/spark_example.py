@@ -8,6 +8,7 @@ import flytekit
 from flytekit import ImageSpec, Resources, task, workflow
 from flytekitplugins.spark import Spark
 
+
 custom_image = ImageSpec(
     base_image="apache/spark-py:v3.4.0", python_version="3.10", packages=["flytekitplugins-spark==1.16.3", "pyspark"]
 )

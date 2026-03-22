@@ -24,6 +24,14 @@ dev = [
     "ruff>=0.11.0",
     "setuptools-scm>=8.2.0",
     "flytekitplugins-bigquery",
+    "flytekitplugins-spark",
+    "flyteplugins-spark",
+    "flytekitplugins-dask",
+    "flyteplugins-dask",
+    "flytekitplugins-ray",
+    "flyteplugins-ray",
+    "flytekitplugins-kfpytorch",
+    "flyteplugins-pytorch",
     "google-cloud-bigquery>=3.31.0",
     "pandas",
     "pyarrow",
@@ -91,6 +99,11 @@ ignore = ["PGH003", "PLC0415"]
 
 [tool.uv]
 prerelease = "allow"
+environments = [
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'linux'",
+]
 
 [tool.mypy]
 disable_error_code = ["import-untyped"]

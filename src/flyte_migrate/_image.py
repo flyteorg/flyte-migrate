@@ -7,6 +7,7 @@ and returns a v2 ``flyte.Image``.
 The v1-to-v2 plugin package name mapping is defined in :data:`_PACKAGE_V1_TO_V2`.
 """
 
+import re
 from functools import cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, cast
@@ -41,15 +42,35 @@ def _parse_platform(platform_str: Optional[str]) -> Optional[Tuple[str, ...]]:
     return tuple(p.strip() for p in platform_str.split(","))
 
 
+_VERSION_SPECIFIER_RE = re.compile(r"([><=!~]+.*)")
+
+
+def _strip_version_specifier(pkg: str) -> Tuple[str, str]:
+    """Split a package string into (name, version_specifier).
+
+    E.g. ``"flytekitplugins-spark==1.16.3"`` -> ``("flytekitplugins-spark", "==1.16.3")``.
+    """
+    match = _VERSION_SPECIFIER_RE.search(pkg)
+    if match:
+        return pkg[: match.start()], match.group(0)
+    return pkg, ""
+
+
 def _translate_pip_packages(packages: Optional[List[str]]) -> List[str]:
     """Translate v1 pip package names to v2 equivalents.
 
     Always includes ``flytekit`` as a base dependency. Plugin package names
     listed in :data:`_PACKAGE_V1_TO_V2` are replaced with their v2 counterparts.
+    Version specifiers (e.g. ``==1.16.3``) are stripped before lookup and
+    discarded — v2 packages use their own versioning.
     """
     translated = ["flytekit"]
     for pkg in packages or []:
-        translated.append(_PACKAGE_V1_TO_V2.get(pkg, pkg))
+        name, _version = _strip_version_specifier(pkg)
+        v2_name = _PACKAGE_V1_TO_V2.get(name)
+        if v2_name:
+            translated.append(v2_name)
+        translated.append(pkg)
     return translated
 
 

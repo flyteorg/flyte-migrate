@@ -126,11 +126,11 @@ class TestConvertSingleSecret:
         assert result.group == "my-group"
 
     def test_file_mount_sets_mount_not_env_var(self):
-        """When mount_requirement is FILE, env_var should map to mount (not as_env_var)."""
+        """When mount_requirement is FILE, mount should be /etc/flyte/secrets."""
         s = MagicMock(spec=flytekit.Secret)
         s.key = "my-key"
         s.group = "my-group"
-        s.env_var = "/etc/flyte/secrets"
+        s.env_var = None
         s.mount_requirement = flytekit.Secret.MountType.FILE
         result = _convert_single_secret(s)
         assert isinstance(result, flyte.Secret)
@@ -225,6 +225,20 @@ class TestTranslatePipPackages:
     def test_plugin_translation(self):
         result = _translate_pip_packages(["flytekitplugins-spark", "pandas"])
         assert result == ["flytekit", "flyteplugins-spark", "pandas"]
+
+    def test_plugin_with_version_specifier(self):
+        result = _translate_pip_packages(["flytekitplugins-spark==1.16.3", "pandas>=2.0"])
+        assert result == ["flytekit", "flyteplugins-spark", "pandas>=2.0"]
+
+    def test_plugin_with_various_specifiers(self):
+        result = _translate_pip_packages(
+            [
+                "flytekitplugins-kfpytorch>=1.0,<2.0",
+                "flytekitplugins-ray!=0.5",
+                "flytekitplugins-dask~=1.2",
+            ]
+        )
+        assert result == ["flytekit", "flyteplugins-pytorch", "flyteplugins-ray", "flyteplugins-dask"]
 
     def test_all_known_plugins(self):
         result = _translate_pip_packages(list(_PACKAGE_V1_TO_V2.keys()))

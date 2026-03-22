@@ -2,7 +2,6 @@ import flyte_migrate  # noqa: F401, I001
 import logging
 import os
 
-import flyte
 import torch
 from flytekit import ImageSpec, Resources, task, workflow
 from flytekitplugins.kfpytorch import CleanPodPolicy, Elastic, RunPolicy

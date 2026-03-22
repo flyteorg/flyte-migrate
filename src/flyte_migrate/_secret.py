@@ -4,10 +4,14 @@ The v1 ``MountType.FILE`` maps to the v2 ``mount`` parameter, while
 ``MountType.ENV_VAR`` (or the default) maps to ``as_env_var``.
 """
 
+from pathlib import Path
 from typing import List, Optional, Union
 
 import flyte
 import flytekit
+
+# The only mount path supported by the v2 SDK for file-based secrets.
+_SECRET_MOUNT_PATH = Path("/etc/flyte/secrets")
 
 
 def _transform_secret_v1_to_v2(
@@ -25,13 +29,13 @@ def _transform_secret_v1_to_v2(
 def _convert_single_secret(secret: flytekit.Secret) -> flyte.Secret:
     """Map a single v1 ``flytekit.Secret`` to a v2 ``flyte.Secret``.
 
-    * ``MountType.FILE`` -> ``mount`` parameter
-    * Any other mount type   -> ``as_env_var`` parameter
+    * ``MountType.FILE`` -> ``mount=Path("/etc/flyte/secrets")``
+    * Any other mount type -> ``as_env_var`` parameter
     """
     is_file_mount = secret.mount_requirement == flytekit.Secret.MountType.FILE
     return flyte.Secret(
         key=secret.key,
         group=secret.group,
         as_env_var=secret.env_var if not is_file_mount else None,
-        mount=secret.env_var if is_file_mount else None,
+        mount=_SECRET_MOUNT_PATH if is_file_mount else None,
     )
