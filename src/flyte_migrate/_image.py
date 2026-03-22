@@ -11,6 +11,7 @@ _package_v1_to_v2: Dict[str, str] = {
     "flytekitplugins-spark": "flyteplugins-spark",
     "flytekitplugins-ray": "flyteplugins-ray",
     "flytekitplugins-dask": "flyteplugins-dask",
+    "flytekitplugins-kfpytorch": "flyteplugins-pytorch",
 }
 
 

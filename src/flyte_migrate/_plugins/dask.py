@@ -9,8 +9,8 @@ def _transform_dask_config_v1_to_v2(v1_config: Optional[Any]) -> Optional[Any]:
         from flyteplugins.dask.task import Dask as v2Dask
         from flyteplugins.dask.task import Scheduler as v2Scheduler
         from flyteplugins.dask.task import WorkerGroup as v2WorkerGroup
-    except ModuleNotFoundError:
-        return None
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(f"Dask plugin is not installed. Please ensure that {e.name} is installed.") from e
 
     if not isinstance(v1_config, v1DaskConfig):
         return None
