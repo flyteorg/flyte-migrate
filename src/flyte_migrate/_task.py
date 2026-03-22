@@ -39,6 +39,7 @@ def task_shim(
     docs: Optional[flytekit.Documentation] = None,
     pod_template: Optional[flytekit.PodTemplate] = None,
     pod_template_name: Optional[str] = None,
+    enable_deck: Optional[bool] = None,
     # labels: Optional[dict[str, str]] = None,
     # annotations: Optional[dict[str, str]] = None,
     **kwargs,
@@ -47,6 +48,9 @@ def task_shim(
         logger.debug(f"Unsupported args {kwargs.values()}")
 
     def v2_decorator(_task_function: Optional[Callable[P, R]] = None) -> Callable[P, R]:
+        if _task_function is None:
+            raise ValueError("Task function cannot be None")
+
         env = flyte.TaskEnvironment(
             name=_task_function.__name__ + "_env",
             resources=_transform_resource_v1_to_v2(requests, limits, resources, accelerator, shared_memory),
@@ -59,8 +63,14 @@ def task_shim(
             description=docs.short_description if docs else None,
         )
         parent_env.depends_on.append(env)
-        _task_to_env[_transform_image_spec_v1_to_v2(container_image)] = env
-        return env.task(_task_function, retries=retries, timeout=timeout, interruptible=interruptible)
+        image_key = str(_transform_image_spec_v1_to_v2(container_image))
+        _task_to_env[image_key] = env
+        return env.task(
+            _task_function,
+            retries=retries,
+            report=bool(enable_deck),
+            timeout=timeout,  # type: ignore[arg-type,return-value]
+        )
 
     if _task_function is None:
         return v2_decorator

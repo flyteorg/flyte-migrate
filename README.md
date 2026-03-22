@@ -1,19 +1,20 @@
-# Flyte Migrate
+# flyte-migrate
 
-**Seamlessly migrate your Flyte v1 workflows to v2 with zero code changes.**
+**Seamlessly migrate your FlyteKit v1 workflows to Flyte v2 without rewriting your code.**
 
-## What is this?
+## What is flyte-migrate?
 
-`flyte-migrate` is a compatibility layer that lets you run your existing Flyte v1 code on Flyte v2 without rewriting anything. Simply add one import line, and you're ready to go.
+`flyte-migrate` is a compatibility layer that allows your existing flyte v1 workflows to run on Flyte v2 infrastructure. Instead of rewriting thousands of lines of workflow code, simply import `flyte_migrate` alongside your existing code and continue using familiar v1 APIs.
 
-## Why do you need this?
+Think of it as a translator: your v1 code speaks to `flyte-migrate`, and `flyte-migrate` speaks to Flyte v2.
 
-Flyte v2 brings powerful improvements, but migrating existing workflows can be time-consuming. This tool bridges the gap by:
+## Why use flyte-migrate?
 
-- **Zero refactoring required** - Your v1 code works immediately on v2
-- **Gradual migration** - Migrate at your own pace, one workflow at a time
-- **Full compatibility** - Works with tasks, workflows, dynamic tasks, map tasks, and plugins
-- **Production ready** - Battle-tested with real-world workflows
+- **Zero Code Rewrites**: Keep using flytekit syntax you already know
+- **Gradual Migration**: Migrate workflows incrementally at your own pace
+- **Reduced Risk**: Test v2 infrastructure without changing your codebase
+- **Full Feature Support**: Tasks, workflows, dynamic tasks, map tasks, and plugins all work
+- **Plugin Compatibility**: Ray, Spark, Dask, PyTorch plugins are automatically translated
 
 ## Quick Start
 
@@ -23,65 +24,56 @@ Flyte v2 brings powerful improvements, but migrating existing workflows can be t
 pip install flyte-migrate
 ```
 
-### Usage
+### Basic Usage
 
-Add this single line at the top of your existing Flyte v1 code:
+Your existing FlyteKit v1 code:
 
 ```python
-import flyte_migrate  # noqa: F401, I001
-```
+from flytekit import task, workflow
 
-That's it! Your v1 workflow now runs on v2.
-
-### Before and After
-
-**Your existing v1 code:**
-```python
-from flytekit import task, workflow, ImageSpec
-
-image = ImageSpec(packages=["pandas", "numpy"])
-
-@task(container_image=image, retries=3)
-def process_data(name: str):
-    print(f"Processing {name}")
+@task
+def greet(name: str) -> str:
+    return f"Hello, {name}!"
 
 @workflow
-def my_workflow(name: str):
-    process_data(name=name)
+def hello_workflow(name: str) -> str:
+    return greet(name=name)
 ```
 
-**Add one line to make it v2 compatible:**
+To run on Flyte v2, just add one import:
+
 ```python
-import flyte_migrate  # noqa: F401, I001
+import flyte_migrate  # Add this line
+from flytekit import task, workflow
 
-from flytekit import task, workflow, ImageSpec
-
-image = ImageSpec(packages=["pandas", "numpy"])
-
-@task(container_image=image, retries=3)
-def process_data(name: str):
-    print(f"Processing {name}")
+@task
+def greet(name: str) -> str:
+    return f"Hello, {name}!"
 
 @workflow
-def my_workflow(name: str):
-    process_data(name=name)
+def hello_workflow(name: str) -> str:
+    return greet(name=name)
 ```
 
-Done! No other changes needed.
+That's it! Your v1 workflow now runs on Flyte v2.
 
-## What gets migrated?
+### Running Workflows
 
-`flyte-migrate` automatically converts v1 patterns to v2:
+Execute locally:
 
-- **Tasks** - All task configurations (resources, retries, caching, etc.)
-- **Workflows** - Workflow definitions and dependencies
-- **Dynamic tasks** - Runtime task generation
-- **Map tasks** - Parallel execution patterns
-- **Container images** - ImageSpec and custom images
-- **Resources** - CPU, memory, GPU, and storage requests/limits
-- **Plugins** - Ray, Spark, and other integrations
-- **Secrets** - Environment variables and secret mounting
-- **Pod templates** - Kubernetes pod customizations
+```python
+import flyte
+
+flyte.init_from_config()
+result = flyte.with_runcontext(mode="local").run(hello_workflow, name="World")
+```
+
+Execute remotely:
+
+```python
+run = flyte.with_runcontext(mode="remote").run(hello_workflow, name="World")
+print(run.url)
+```
 
 ## Examples
 
@@ -104,77 +96,29 @@ python examples/hello.py
 | Error Handling | [`examples/error_handling_example.py`](examples/error_handling_example.py) | `retries`, `timeout`, error patterns |
 | Secrets | [`examples/secret_example.py`](examples/secret_example.py) | `Secret`, `MountType.FILE`, `env_var` |
 | Launch Plans | [`examples/launchplan_example.py`](examples/launchplan_example.py) | Workflow patterns (LaunchPlan.get_or_create not yet supported) |
+| Deck / Reports | [`examples/deck_example.py`](examples/deck_example.py) | `enable_deck`, `Deck`, v2 report conversion |
 
 ### Plugin Examples
 
 | Example | File | v1 APIs Demonstrated |
 |---------|------|---------------------|
-| Ray | [`examples/plugins/ray_example.py`](examples/plugins/ray_example.py) | `RayJobConfig`, `WorkerNodeConfig`, `Resources` |
+| Ray | [`examples/plugins/ray_example.py`](examples/plugins/ray_example.py) | `RayJobConfig`, `WorkerNodeConfig`, `HeadNodeConfig`, `Resources` |
 | Spark | [`examples/plugins/spark_example.py`](examples/plugins/spark_example.py) | `Spark` plugin config, `spark_session` context |
+| PyTorch | [`examples/plugins/pytorch_example.py`](examples/plugins/pytorch_example.py) | `Elastic` (PyTorch distributed training) |
+| Dask | [`examples/plugins/dask_example.py`](examples/plugins/dask_example.py) | `Dask` plugin config |
 
-### Basic Task
+## How It Works
 
-```python
-import flyte_migrate  # noqa: F401, I001
+`flyte-migrate` provides shimmed implementations of flytekit v1 APIs that:
 
-from flytekit import task, workflow
+1. Accept v1-style configurations
+2. Translate them to Flyte v2 equivalents
+3. Execute using the Flyte v2 engine
 
-@task(cache=True, retries=3)
-def say_hello(name: str):
-    print(f"Hello, {name}!")
-
-@workflow
-def hello_workflow(name: str):
-    say_hello(name=name)
-```
-
-### File I/O with FlyteFile
-
-```python
-import flyte_migrate  # noqa: F401, I001
-
-from flytekit import task, workflow
-from flytekit.types.file import FlyteFile
-
-@task
-def write_data(data: str) -> FlyteFile:
-    with open("/tmp/output.csv", "w") as f:
-        f.write(data)
-    return FlyteFile("/tmp/output.csv")
-
-@task
-def read_data(ff: FlyteFile) -> str:
-    with open(ff, "r") as f:
-        return f.read()
-
-@workflow
-def file_wf(data: str = "hello") -> str:
-    ff = write_data(data=data)
-    return read_data(ff=ff)
-```
-
-### Nested Workflows
-
-```python
-import flyte_migrate  # noqa: F401, I001
-
-from flytekit import task, workflow
-
-@task
-def compute_mean(data: list[float]) -> float:
-    return sum(data) / len(data)
-
-@workflow
-def analyze(source: str) -> float:
-    data = fetch_data(source=source)
-    return compute_mean(data=data)
-
-@workflow
-def parent_wf() -> str:
-    mean_a = analyze(source="sensor_a")
-    mean_b = analyze(source="sensor_b")
-    return combine(mean_a=mean_a, mean_b=mean_b)
-```
+This means you get:
+- The familiarity of v1 syntax
+- The performance and features of v2 infrastructure
+- A clear path to eventual full v2 adoption
 
 ## API Coverage
 
@@ -191,6 +135,7 @@ def parent_wf() -> str:
 | | `interruptible` | Supported | - |
 | | `container_image` | Supported | `hello.py` |
 | | `secret_requests` | Supported | `secret_example.py` |
+| | `enable_deck` | Supported | `deck_example.py` |
 | | `environment` | Supported | - |
 | **Resources** | `Resources` (cpu, mem, gpu) | Supported | `ray_example.py` |
 | | `requests` / `limits` | Supported | `ray_example.py` |
@@ -204,65 +149,62 @@ def parent_wf() -> str:
 | | `@dataclass` | Supported | `complex_types_example.py` |
 | | `List`, `Tuple`, primitives | Supported | Various |
 | **Patterns** | `map_task` | Supported | `map_task.py` |
-| | `conditional` (workflow-level) | Not supported | - |
-| | `LaunchPlan.get_or_create` | Not supported | - |
+| | `LaunchPlan` (as trigger) | Supported | `launchplan.py` |
 | | Nested workflows | Supported | `nested_workflow_example.py` |
 | **Plugins** | Ray (`RayJobConfig`) | Supported | `ray_example.py` |
 | | Spark (`Spark`) | Supported | `spark_example.py` |
+| | PyTorch (`Elastic`) | Supported | `pytorch_example.py` |
+| | Dask (`Dask`) | Supported | `dask_example.py` |
 | **Context** | `current_context()` | Supported | `spark_example.py` |
 | | `spark_session` | Supported | `spark_example.py` |
+| **Secrets** | `Secret` (env var) | Supported | `secret_example.py` |
+| | `Secret` (file mount) | Supported | `secret_example.py` |
 
 ### Not Yet Supported
 
 | API | Notes |
 |-----|-------|
 | `conditional()` | Workflow-level branching not yet shimmed - use task-level conditionals instead |
-| `LaunchPlan.get_or_create` | LaunchPlan creation not shimmed - workflows work directly |
+| `LaunchPlan.get_or_create` | LaunchPlan creation not shimmed - use workflows directly |
 | `PodTemplate` | Stubbed (returns None) |
 | `reference_task` / `reference_workflow` | Not yet implemented |
 | `ContainerTask` | Not yet implemented |
 | `approve` / `wait_for_input` | Not yet implemented |
 | `StructuredDataset` | Not yet tested |
 
-## How it works
-
-`flyte-migrate` uses Python's import system to intercept v1 API calls and transparently convert them to v2 equivalents. The conversion happens at import time, so there's no runtime overhead.
-
-Under the hood, it:
-1. Patches `flytekit` decorators (`@task`, `@workflow`, `@dynamic`)
-2. Translates v1 configuration objects to v2 `TaskEnvironment` and `WorkflowEnvironment`
-3. Maps plugin configurations to v2 plugin system
-4. Handles resource specifications and container images
-
 ## Requirements
 
-- Python 3.10+
-- `flyte` (v2 SDK)
-- `flytekit` (for compatibility)
+- Python 3.10 or higher
+- Flyte v2 SDK (`flyte` package)
+- `flytekit`
 
-## Migration Path
+## Development
 
-1. **Install** `flyte-migrate` in your environment
-2. **Add** the import to your v1 workflows
-3. **Test** your workflows on Flyte v2
-4. **Gradually refactor** to native v2 code when ready (optional)
+### Setup
 
-You can keep using `flyte-migrate` indefinitely, or use it as a bridge while you refactor to native v2 code at your own pace.
+```bash
+# Clone the repository
+git clone https://github.com/flyteorg/flyte-migrate.git
+cd flyte-migrate
 
-## Contributing
+# Install in development mode
+pip install -e .
+```
 
-Contributions are welcome! Please check the [issues](../../issues) for open tasks or submit a pull request.
+## FAQ
+
+**Q: Will this work with all my v1 workflows?**
+A: Most v1 workflows should work. If you encounter issues, please open an issue on GitHub.
+
+**Q: Is there a performance penalty?**
+A: The translation overhead is minimal. Your tasks run directly on Flyte v2 infrastructure.
+
+**Q: When should I fully migrate to v2?**
+A: Use `flyte-migrate` to buy time and reduce risk. Migrate to native v2 APIs when convenient.
+
+**Q: Can I mix v1 and v2 code?**
+A: Yes! You can gradually introduce v2 code while keeping v1 code working via `flyte-migrate`.
 
 ## License
 
-Apache License 2.0
-
-## Support
-
-- **Documentation**: [Flyte Documentation](https://docs.flyte.org/)
-- **Issues**: [GitHub Issues](../../issues)
-- **Community**: [Flyte Slack](https://flyte.org/slack)
-
----
-
-**Made with love by the Flyte community**
+Apache License 2.0 - See [LICENSE](LICENSE) for details.
