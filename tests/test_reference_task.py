@@ -1,9 +1,9 @@
 """Tests for the reference_task shim (_reference.py)."""
 
 import flytekit
-from flyte.remote._task import LazyEntity
 
 import flyte_migrate  # noqa: F401 — triggers patching
+from flyte_migrate._reference import _SyncLazyEntity
 
 
 class TestReferenceTaskShim:
@@ -24,7 +24,7 @@ class TestReferenceTaskShim:
         )
         def my_remote_task(a: str) -> str: ...
 
-        assert isinstance(my_remote_task, LazyEntity)
+        assert isinstance(my_remote_task, _SyncLazyEntity)
         assert my_remote_task.name == "my_module.my_task"
 
     def test_stub_body_is_ignored(self):
@@ -40,7 +40,7 @@ class TestReferenceTaskShim:
             raise RuntimeError("This should never run")
 
         # The result is a LazyEntity, not the original function
-        assert isinstance(stub_task, LazyEntity)
+        assert isinstance(stub_task, _SyncLazyEntity)
 
     def test_different_params_produce_different_entities(self):
         """Each reference_task call with different params should create a distinct entity."""
