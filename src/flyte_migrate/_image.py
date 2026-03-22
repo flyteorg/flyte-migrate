@@ -218,7 +218,7 @@ def _build_base_image(spec: flytekit.ImageSpec) -> flyte.Image:
     if isinstance(spec.base_image, str):
         image = (
             flyte.Image.from_base(spec.base_image)
-            .clone(name=spec.name, python_version=python_version, registry=spec.registry)
+            .clone(name=spec.name, python_version=python_version, registry=spec.registry, extendable=True)
             .with_pip_packages("flyte", pre=True)
         )
     else:
