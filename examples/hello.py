@@ -3,7 +3,6 @@ import logging
 
 from flytekit import ImageSpec, dynamic, task, workflow
 
-
 image = ImageSpec(apt_packages=["git"], packages=["pandas", "mypy", "ty"])
 
 
