@@ -1,3 +1,18 @@
+"""Transform v1 ``flytekit.LaunchPlan`` into v2 ``Trigger`` objects.
+
+FlyteKit v1 uses ``LaunchPlan.create()`` / ``LaunchPlan.get_or_create()`` to
+attach schedules (cron or fixed-rate) to workflows.  In v2, the equivalent
+concept is a ``Trigger`` attached to a ``TaskEnvironment``.
+
+This module provides:
+
+- ``merge_inputs`` -- combine default and fixed inputs into a single dict.
+- ``schedule_to_trigger`` -- convert a v1 ``Schedule`` model into a v2
+  ``Trigger`` with the appropriate ``Cron`` or ``FixedRate`` automation.
+- ``LaunchPlanTransformer`` -- drop-in replacement for ``flytekit.LaunchPlan``
+  that creates or retrieves triggers on the parent ``TaskEnvironment``.
+"""
+
 from typing import Any, Dict, Optional, Union
 
 import flytekit
@@ -15,6 +30,11 @@ def merge_inputs(
     default_inputs: Optional[Dict[str, Any]] = None,
     fixed_inputs: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    """Merge *default_inputs* and *fixed_inputs* into a single dictionary.
+
+    Fixed inputs take precedence over default inputs when both are provided.
+    Returns an empty dict when neither is supplied.
+    """
     if default_inputs is None and fixed_inputs is None:
         return {}
     if fixed_inputs is None:
@@ -22,6 +42,24 @@ def merge_inputs(
     if default_inputs is None:
         return fixed_inputs
     return {**default_inputs, **fixed_inputs}
+
+
+def _resolve_automation(schedule: _schedule_model.Schedule) -> Union[Cron, FixedRate]:
+    """Determine the v2 automation type from a v1 schedule model.
+
+    Checks for a fixed-rate schedule first, then a cron expression, and
+    finally a cron schedule object.
+
+    Raises:
+        ValueError: If the schedule type is not recognised.
+    """
+    if schedule.rate:
+        return FixedRate(schedule.rate.value)
+    if schedule.cron_expression:
+        return Cron(schedule.cron_expression)
+    if schedule.cron_schedule.schedule:
+        return Cron(schedule.cron_schedule.schedule)
+    raise ValueError(f"Unsupported schedule type: {schedule}")
 
 
 def schedule_to_trigger(
@@ -34,37 +72,33 @@ def schedule_to_trigger(
     labels: Optional[_common_models.Labels] = None,
     annotations: Optional[_common_models.Annotations] = None,
 ) -> Optional[Trigger]:
+    """Convert a v1 ``Schedule`` into a v2 ``Trigger``.
+
+    Returns ``None`` when no *schedule* is provided, allowing callers to
+    skip trigger attachment for launch plans without schedules.
+    """
     if schedule is None:
         return None
-    if overwrite_cache is None:
-        overwrite_cache = False
-    labels = dict(labels.values.items()) if labels else None
-    annotations = dict(annotations.values.items()) if annotations else None
-    inputs = merge_inputs(default_inputs, fixed_inputs)
-
-    automation: Union[Cron, FixedRate]
-
-    if schedule.rate:
-        automation = FixedRate(schedule.rate.value)
-    elif schedule.cron_expression:
-        automation = Cron(schedule.cron_expression)
-    elif schedule.cron_schedule.schedule:
-        automation = Cron(schedule.cron_schedule.schedule)
-    else:
-        raise ValueError(f"Unsupported schedule type: {schedule}")
 
     return Trigger(
         name=name,
-        automation=automation,
-        inputs=inputs,
-        overwrite_cache=overwrite_cache,
+        automation=_resolve_automation(schedule),
+        inputs=merge_inputs(default_inputs, fixed_inputs),
+        overwrite_cache=overwrite_cache if overwrite_cache is not None else False,
         auto_activate=auto_activate,
-        labels=labels,
-        annotations=annotations,
+        labels=dict(labels.values.items()) if labels else None,
+        annotations=dict(annotations.values.items()) if annotations else None,
     )
 
 
-class LaunchPlanTransformer(object):
+class LaunchPlanTransformer:
+    """Drop-in replacement for ``flytekit.LaunchPlan``.
+
+    Translates v1 ``LaunchPlan.create()`` and ``LaunchPlan.get_or_create()``
+    calls into v2 ``Trigger`` objects attached to the parent
+    ``TaskEnvironment``.
+    """
+
     @classmethod
     def create(
         cls,
@@ -75,34 +109,44 @@ class LaunchPlanTransformer(object):
         schedule: Optional[_schedule_model.Schedule] = None,
         overwrite_cache: Optional[bool] = None,
         auto_activate: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ) -> TaskEnvironment:
+        """Create a v2 trigger from v1 launch plan parameters.
+
+        If a trigger with the same *name* already exists on the task template,
+        this is a no-op (idempotent).
+        """
         if kwargs:
             logger.debug(f"Unsupported args in v2 trigger {kwargs.values()}")
 
-        # Add trigger if it is not existed
         task_name = parent_env.name + "." + workflow.func.__name__
-        if task_name in parent_env._tasks:
-            task_template = parent_env._tasks[task_name]
-            triggers = getattr(task_template, "triggers", ())
-            for t in triggers:
-                if t.name == name:
-                    return parent_env
+        if task_name not in parent_env._tasks:
+            return parent_env
 
-            trigger = schedule_to_trigger(
-                name=name,
-                schedule=schedule,
-                default_inputs=default_inputs,
-                fixed_inputs=fixed_inputs,
-                overwrite_cache=overwrite_cache,
-                auto_activate=auto_activate,
-            )
-            if trigger is not None and hasattr(parent_env._tasks[task_name], "triggers"):
-                task_template.triggers += (trigger,)
+        task_template = parent_env._tasks[task_name]
+
+        # Skip if a trigger with this name already exists (idempotent).
+        existing_triggers = getattr(task_template, "triggers", ())
+        for t in existing_triggers:
+            if t.name == name:
+                return parent_env
+
+        trigger = schedule_to_trigger(
+            name=name,
+            schedule=schedule,
+            default_inputs=default_inputs,
+            fixed_inputs=fixed_inputs,
+            overwrite_cache=overwrite_cache,
+            auto_activate=auto_activate,
+        )
+        if trigger is not None and hasattr(task_template, "triggers"):
+            task_template.triggers += (trigger,)
+
         return parent_env
 
     @classmethod
-    def get_or_create(cls, **kwargs) -> TaskEnvironment:
+    def get_or_create(cls, **kwargs: Any) -> TaskEnvironment:
+        """Alias for ``create`` -- v1 API compatibility."""
         return cls.create(**kwargs)
 
 
