@@ -98,5 +98,21 @@ def reference_launch_plan_shim(
     return reference_task_shim(project, domain, name, version)
 
 
+def reference_workflow_shim(
+    project: str,
+    domain: str,
+    name: str,
+    version: str | None = None,
+) -> Callable:
+    """Drop-in replacement for ``flytekit.reference_workflow``.
+
+    Shimmed v1 workflows register as tasks in the ``flytekit_workflow``
+    environment, so ``name`` must be ``flytekit_workflow.<workflow_name>``.
+    Otherwise identical to :func:`reference_task_shim`.
+    """
+    return reference_task_shim(project, domain, name, version)
+
+
 flytekit.reference_task = reference_task_shim
 flytekit.reference_launch_plan = reference_launch_plan_shim
+flytekit.reference_workflow = reference_workflow_shim
