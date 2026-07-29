@@ -1,10 +1,11 @@
-"""Target workflow for reference_task_example.py.
+"""Target workflow for the reference_task / reference_launch_plan examples.
 
-Run this first — it registers ``greet_env.greet`` on the cluster, which
-reference_task_example.py then invokes as a v1 ``@reference_task``.
+Run this first — it deploys ``greet_env.greet`` and ``flytekit_workflow.greet_wf``
+to the cluster, which the reference examples then invoke. Note: tasks must be
+*deployed* (not just run) to be resolvable by reference.
 """
 
-import flyte_migrate  # noqa: F401, I001
+import flyte_migrate  # noqa: I001
 
 from flytekit import task, workflow
 
@@ -23,6 +24,5 @@ if __name__ == "__main__":
     import flyte
 
     flyte.init_from_config()
-    run = flyte.with_runcontext(mode="remote").run(greet_wf, name="flyte")
-    print(run.name)
-    print(run.url)
+    deployments = flyte_migrate.deploy()
+    print(deployments[0].summary_repr())
