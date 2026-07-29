@@ -42,6 +42,19 @@ class TestReferenceTaskShim:
         # The result is a LazyEntity, not the original function
         assert isinstance(stub_task, _SyncLazyEntity)
 
+    def test_version_optional_defaults_to_latest(self):
+        """Omitting version should resolve via auto_version='latest' instead of raising."""
+
+        @flytekit.reference_task(
+            project="my-project",
+            domain="development",
+            name="my_module.my_task",
+        )
+        def latest_task(a: str) -> str: ...
+
+        assert isinstance(latest_task, _SyncLazyEntity)
+        assert latest_task.name == "my_module.my_task"
+
     def test_different_params_produce_different_entities(self):
         """Each reference_task call with different params should create a distinct entity."""
 

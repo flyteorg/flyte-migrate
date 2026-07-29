@@ -58,12 +58,15 @@ def reference_task_shim(
     project: str,
     domain: str,
     name: str,
-    version: str,
+    version: str | None = None,
 ) -> Callable:
     """Drop-in replacement for ``flytekit.reference_task``.
 
     Returns a decorator that ignores the stub function body and instead returns
     a sync-safe wrapper around a v2 ``LazyEntity`` pointing to the remote task.
+
+    Unlike v1, ``version`` may be omitted — the latest registered version of the
+    task is then resolved at call time (v2 ``auto_version="latest"``).
     """
 
     def wrapper(fn: Callable[..., Any]) -> Any:
@@ -72,6 +75,7 @@ def reference_task_shim(
             project=project,
             domain=domain,
             version=version,
+            auto_version="latest" if version is None else None,
         )
         return _SyncLazyEntity(entity)
 
