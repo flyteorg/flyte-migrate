@@ -5,7 +5,7 @@ to the cluster, which the reference examples then invoke. Note: tasks must be
 *deployed* (not just run) to be resolvable by reference.
 """
 
-import flyte_migrate  # noqa: I001
+import flyte_migrate  # noqa: F401, I001
 
 from flytekit import task, workflow
 
@@ -24,5 +24,7 @@ if __name__ == "__main__":
     import flyte
 
     flyte.init_from_config()
-    deployments = flyte_migrate.deploy()
+    # Deploy the same way as v2: the workflow's parent env depends on every
+    # shimmed task env, so one flyte.deploy call registers everything.
+    deployments = flyte.deploy(greet_wf.parent_env())
     print(deployments[0].summary_repr())
