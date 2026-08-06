@@ -24,6 +24,7 @@ dev = [
     "ruff>=0.11.0",
     "setuptools-scm>=8.2.0",
     "flytekitplugins-bigquery",
+    "flytekitplugins-deck-standard",
     "flytekitplugins-spark",
     "flyteplugins-spark",
     "flytekitplugins-dask",
@@ -58,7 +59,11 @@ root = "."
 norecursedirs = []
 log_cli = true
 log_cli_level = 20
-markers = []
+markers = [
+    "integration: runs examples against a real cluster; opt in with -m integration",
+    "plugins: integration examples needing cluster operators or external services",
+]
+addopts = "-m 'not integration'"
 asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]

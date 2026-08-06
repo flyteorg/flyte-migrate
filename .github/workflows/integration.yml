@@ -1,0 +1,40 @@
+name: Integration Tests
+
+# Runs every example in examples/ against a real Flyte v2 cluster.
+# Requires the FLYTE_API_KEY repo secret and an API_TOKEN secret in the target
+# Flyte project (`uv run flyte create secret API_TOKEN <value>`) for the secret examples.
+on:
+  workflow_dispatch:
+    inputs:
+      include_plugins:
+        description: "also run Spark/Ray/Dask/PyTorch/BigQuery examples"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "0 7 * * *"
+
+jobs:
+  examples:
+    name: Run examples on cluster
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --dev
+
+      - name: Run examples
+        env:
+          FLYTE_API_KEY: ${{ secrets.FLYTE_API_KEY }}
+          FLYTE_PROJECT: flyte-migrate
+          FLYTE_DOMAIN: development
+          MARKERS: ${{ inputs.include_plugins && 'integration' || 'integration and not plugins' }}
+        run: uv run pytest tests/integration -v -s -m "$MARKERS"
