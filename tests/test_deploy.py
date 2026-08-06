@@ -140,3 +140,53 @@ class TestDeployShim:
         # stamped before the underlying deploy saw it, not after
         assert seen["env_vars"][FLYTE_SYS_PATH] == "./src"
         assert seen["kwargs"] == {"dryrun": True}
+
+
+class TestInheritedSysPath:
+    """Child task envs inherit _F_SYS_PATH from the parent container at import time."""
+
+    def test_returns_the_value_from_the_environment(self, monkeypatch):
+        monkeypatch.setenv(FLYTE_SYS_PATH, "./src:./.")
+        assert _deploy.inherited_sys_path() == {FLYTE_SYS_PATH: "./src:./."}
+
+    def test_empty_when_unset(self, monkeypatch):
+        monkeypatch.delenv(FLYTE_SYS_PATH, raising=False)
+        assert _deploy.inherited_sys_path() == {}
+
+    @staticmethod
+    def _build_env(environment=None):
+        from flyte_migrate._task import _build_task_environment
+
+        def some_task():
+            pass
+
+        return _build_task_environment(
+            some_task,
+            cache=False,
+            task_config=None,
+            container_image=None,
+            environment=environment,
+            requests=None,
+            limits=None,
+            resources=None,
+            accelerator=None,
+            shared_memory=None,
+            secret_requests=None,
+            docs=None,
+            pod_template=None,
+            pod_template_name=None,
+        )
+
+    def test_task_env_picks_it_up(self, monkeypatch):
+        """A parent container re-imports the module, so the env must be set at build time."""
+        monkeypatch.setenv(FLYTE_SYS_PATH, "./src:./.")
+        assert self._build_env().env_vars[FLYTE_SYS_PATH] == "./src:./."
+
+    def test_user_env_vars_win(self, monkeypatch):
+        monkeypatch.setenv(FLYTE_SYS_PATH, "./src")
+        env = self._build_env({"MINE": "1", FLYTE_SYS_PATH: "./theirs"})
+        assert env.env_vars == {"MINE": "1", FLYTE_SYS_PATH: "./theirs"}
+
+    def test_none_when_nothing_to_set(self, monkeypatch):
+        monkeypatch.delenv(FLYTE_SYS_PATH, raising=False)
+        assert self._build_env().env_vars is None

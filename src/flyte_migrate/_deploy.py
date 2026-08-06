@@ -14,6 +14,7 @@ the code bundle, not as an installed package.
 So: wrap ``flyte.deploy`` and stamp the same value ``flyte.run`` would have.
 """
 
+import os
 import pathlib
 import sys
 from typing import Any, Dict, Iterable, List, Optional
@@ -34,6 +35,18 @@ def _local_sys_path() -> Optional[str]:
     root_dir = pathlib.Path(cfg.root_dir).resolve()
     paths = [f"./{pathlib.Path(p).relative_to(root_dir)}" for p in sys.path if pathlib.Path(p).is_relative_to(root_dir)]
     return ":".join(paths) if paths else None
+
+
+def inherited_sys_path() -> Dict[str, str]:
+    """``_F_SYS_PATH`` from the current process, to pass down to child task environments.
+
+    Deploy-time stamping only reaches the registered spec. A parent workflow container
+    re-imports the module at runtime and re-serializes its child task templates from
+    scratch, so those children would ship with no env at all. The parent's own container
+    does carry the value — it came from the registered spec — so children inherit it here.
+    """
+    value = os.environ.get(FLYTE_SYS_PATH)
+    return {FLYTE_SYS_PATH: value} if value else {}
 
 
 def _set_sys_path(target: Any, value: str) -> None:

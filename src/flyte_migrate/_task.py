@@ -14,6 +14,7 @@ import flytekit
 from flyte._logging import logger
 from flytekit.extras.accelerators import BaseAccelerator
 
+from flyte_migrate._deploy import inherited_sys_path
 from flyte_migrate._image import _transform_image_spec_v1_to_v2
 from flyte_migrate._plugins import _transform_plugin_config_v1_to_v2
 from flyte_migrate._pod_template import _transform_pod_template_v1_to_v2
@@ -70,7 +71,7 @@ def _build_task_environment(
         resources=_transform_resource_v1_to_v2(requests, limits, resources, accelerator, shared_memory),
         pod_template=_transform_pod_template_v1_to_v2(pod_template) or pod_template_name,
         secrets=_transform_secret_v1_to_v2(secret_requests),
-        env_vars=environment,
+        env_vars={**inherited_sys_path(), **(environment or {})} or None,
         image=_transform_image_spec_v1_to_v2(container_image),
         cache=_translate_cache_policy(cache),
         plugin_config=_transform_plugin_config_v1_to_v2(task_config),
