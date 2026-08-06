@@ -1,8 +1,8 @@
 name: Publish to PyPI
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]  # cutting a release in the UI fires this, not `push: tags`
   workflow_dispatch:
 
 jobs:
