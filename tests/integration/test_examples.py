@@ -98,12 +98,12 @@ def _run(*argv, **env):
     )
 
 
-@pytest.mark.parametrize("rel,expr", DEPLOY, ids=[d[0] for d in DEPLOY])
-def test_deploy_example(rel, expr):
-    _run("--deploy", f"examples/{rel}", expr)
+@pytest.mark.parametrize("example,expr", DEPLOY, ids=[d[0] for d in DEPLOY])
+def test_deploy_example(example, expr):
+    _run("--deploy", f"examples/{example}", expr)
 
 
-@pytest.mark.parametrize("rel,entrypoint,args", RUN)
-def test_run_example(rel, entrypoint, args):
-    env = {"EXPECT_FAILED": "1"} if f"{rel}:{entrypoint}" in EXPECT_FAILED else {}
-    _run(f"examples/{rel}", entrypoint, *args, **env)
+@pytest.mark.parametrize("example,entrypoint,args", RUN)
+def test_run_example(example, entrypoint, args):
+    env = {"EXPECT_FAILED": "1"} if f"{example}:{entrypoint}" in EXPECT_FAILED else {}
+    _run(f"examples/{example}", entrypoint, *args, **env)

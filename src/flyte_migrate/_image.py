@@ -56,6 +56,22 @@ def _strip_version_specifier(pkg: str) -> Tuple[str, str]:
     return pkg, ""
 
 
+def _pin_to_flyte_version(v2_name: str) -> str:
+    """Pin a v2 plugin package to the running ``flyte`` version.
+
+    ``flyteplugins-*`` are released in lockstep with ``flyte`` and import its
+    internals, so an unpinned plugin resolves to the latest release inside the
+    image while ``flyte`` stays at the base image's version — e.g.
+    ``ImportError: cannot import name 'system_logger' from 'flyte'``.
+
+    Dev builds of ``flyte`` have no matching release on PyPI, so leave those
+    unpinned (mirroring how flyte itself handles dev mode when building images).
+    """
+    from flyte._version import __version__
+
+    return v2_name if "dev" in __version__ else f"{v2_name}=={__version__}"
+
+
 def _translate_pip_packages(packages: Optional[List[str]]) -> List[str]:
     """Translate v1 pip package names to v2 equivalents.
 
@@ -70,7 +86,7 @@ def _translate_pip_packages(packages: Optional[List[str]]) -> List[str]:
         name, _version = _strip_version_specifier(pkg)
         v2_name = _PACKAGE_V1_TO_V2.get(name)
         if v2_name:
-            translated.append(v2_name)
+            translated.append(_pin_to_flyte_version(v2_name))
         translated.append(pkg)
     return translated
 
@@ -257,9 +273,12 @@ def _build_base_image(spec: flytekit.ImageSpec) -> flyte.Image:
             platform=platform,  # type: ignore[arg-type]
         )
 
-    parent_env.image = cast(flyte.Image, parent_env.image).clone(
-        name=spec.name, registry=spec.registry, python_version=python_version
-    )
+    # NOTE: python_version is deliberately not mirrored onto the parent image. clone()
+    # only rewrites the declared version — the base layer stays on the local interpreter's
+    # version, so a task asking for a different one fails the build with
+    # "No interpreter found for Python 3.x in managed installations or search path".
+    # The parent env only runs the workflow driver, so it does not need the task's version.
+    parent_env.image = cast(flyte.Image, parent_env.image).clone(name=spec.name, registry=spec.registry)
     return image
 
 

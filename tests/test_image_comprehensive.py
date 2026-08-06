@@ -12,6 +12,7 @@ from flyte_migrate._image import (
     _extract_attributes,
     _parse_platform,
     _parse_python_version,
+    _pin_to_flyte_version,
     _strip_version_specifier,
     _translate_pip_packages,
 )
@@ -128,41 +129,56 @@ class TestTranslatePipPackages:
 
     def test_spark_plugin_translated(self):
         result = _translate_pip_packages(["flytekitplugins-spark"])
-        assert "flyteplugins-spark" in result
+        assert _pin_to_flyte_version("flyteplugins-spark") in result
         assert "flytekitplugins-spark" in result
 
     def test_ray_plugin_translated(self):
         result = _translate_pip_packages(["flytekitplugins-ray"])
-        assert "flyteplugins-ray" in result
+        assert _pin_to_flyte_version("flyteplugins-ray") in result
         assert "flytekitplugins-ray" in result
 
     def test_dask_plugin_translated(self):
         result = _translate_pip_packages(["flytekitplugins-dask"])
-        assert "flyteplugins-dask" in result
+        assert _pin_to_flyte_version("flyteplugins-dask") in result
         assert "flytekitplugins-dask" in result
 
     def test_pytorch_plugin_translated(self):
         result = _translate_pip_packages(["flytekitplugins-kfpytorch"])
-        assert "flyteplugins-pytorch" in result
+        assert _pin_to_flyte_version("flyteplugins-pytorch") in result
         assert "flytekitplugins-kfpytorch" in result
 
-    def test_version_specifier_preserved_on_v1_package(self):
+    def test_v2_plugin_pinned_to_flyte_version(self):
+        """An unpinned v2 plugin resolves newer than the image's flyte and fails to import."""
+        from flyte._version import __version__
+
+        result = _translate_pip_packages(["flytekitplugins-kfpytorch"])
+        if "dev" in __version__:
+            assert "flyteplugins-pytorch" in result
+        else:
+            assert f"flyteplugins-pytorch=={__version__}" in result
+            assert "flyteplugins-pytorch" not in result
+
+    def test_v1_version_specifier_does_not_leak_onto_v2_package(self):
         result = _translate_pip_packages(["flytekitplugins-spark==1.16.3"])
-        assert "flyteplugins-spark" in result
         assert "flytekitplugins-spark==1.16.3" in result
-        # v2 package should NOT have version specifier
         assert "flyteplugins-spark==1.16.3" not in result
 
     def test_all_four_plugins(self):
         result = _translate_pip_packages(list(_PACKAGE_V1_TO_V2.keys()))
         expected = ["flytekit"]
         for v1, v2 in _PACKAGE_V1_TO_V2.items():
-            expected.extend([v2, v1])
+            expected.extend([_pin_to_flyte_version(v2), v1])
         assert result == expected
 
     def test_mixed_plugins_and_regular(self):
         result = _translate_pip_packages(["pandas", "flytekitplugins-spark", "numpy"])
-        assert result == ["flytekit", "pandas", "flyteplugins-spark", "flytekitplugins-spark", "numpy"]
+        assert result == [
+            "flytekit",
+            "pandas",
+            _pin_to_flyte_version("flyteplugins-spark"),
+            "flytekitplugins-spark",
+            "numpy",
+        ]
 
     def test_unknown_flytekitplugin_not_translated(self):
         result = _translate_pip_packages(["flytekitplugins-unknown"])

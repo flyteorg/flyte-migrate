@@ -14,6 +14,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   examples:
     name: Run examples on cluster
@@ -38,4 +42,4 @@ jobs:
           FLYTE_PROJECT: flyte-migrate
           FLYTE_DOMAIN: development
           MARKERS: ${{ inputs.include_plugins && 'integration' || 'integration and not plugins' }}
-        run: uv run pytest tests/integration -v -s -m "$MARKERS"
+        run: uv run pytest -n 5 tests/integration -v -s -m "$MARKERS"

@@ -64,7 +64,16 @@ if deploy:
 run = flyte.with_runcontext(mode="remote", log_level=logging.DEBUG).run(getattr(mod, entrypoint), **kwargs)
 print("Run name:", run.name)
 print("Run URL:", run.url)
-run.wait(quiet=False)
+# The watch stream behind wait() is long-lived and the server drops it periodically
+# (grpc UNAVAILABLE "Socket closed"), which says nothing about the run. Re-attach.
+for attempt in range(3):
+    try:
+        run.wait(quiet=False)
+        break
+    except Exception as e:
+        if attempt == 2:
+            raise
+        print(f"wait() dropped ({type(e).__name__}: {e}); re-attaching")
 
 expected = ActionPhase.FAILED if os.getenv("EXPECT_FAILED") else ActionPhase.SUCCEEDED
 print(f"DONE: {run.phase}")
