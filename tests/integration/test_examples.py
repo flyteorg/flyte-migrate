@@ -29,13 +29,23 @@ pytestmark = [
     pytest.mark.skipif(not os.getenv("FLYTE_API_KEY"), reason="FLYTE_API_KEY not set"),
 ]
 
-# (example file, expression for the deployable). These run before the run-tests below,
-# because the reference_* examples resolve tasks/launch plans registered here.
+# (example file, expression for the deployable)
 DEPLOY = [
     ("reference_task_target.py", "greet_wf.parent_env()"),
     ("launchplan.py", "lp"),
     ("launchplan_comprehensive.py", "alias_lp"),
 ]
+
+REFERENCE_TARGET = DEPLOY[0]
+
+# These resolve tasks and launch plans registered by reference_task_target.py. Under -n the
+# deploy test above may land on a different worker, or run later, so they deploy it
+# themselves first — registration is idempotent and the image is already built by then.
+NEEDS_REFERENCE_TARGET = {
+    "reference_task_example.py",
+    "reference_launch_plan_example.py",
+    "reference_workflow_example.py",
+}
 
 # (example file, entrypoint, args as `key=expr` evaluated in the example's namespace)
 RUN = [
@@ -105,5 +115,7 @@ def test_deploy_example(example, expr):
 
 @pytest.mark.parametrize("example,entrypoint,args", RUN)
 def test_run_example(example, entrypoint, args):
+    if example in NEEDS_REFERENCE_TARGET:
+        _run("--deploy", f"examples/{REFERENCE_TARGET[0]}", REFERENCE_TARGET[1])
     env = {"EXPECT_FAILED": "1"} if f"{example}:{entrypoint}" in EXPECT_FAILED else {}
     _run(f"examples/{example}", entrypoint, *args, **env)
