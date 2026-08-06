@@ -1,8 +1,6 @@
 name: Integration Tests
 
 # Runs every example in examples/ against a real Flyte v2 cluster.
-# Requires the FLYTE_API_KEY repo secret and an API_TOKEN secret in the target
-# Flyte project (`uv run flyte create secret API_TOKEN <value>`) for the secret examples.
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +10,9 @@ on:
         default: false
   schedule:
     - cron: "0 7 * * *"
+  pull_request:
+    branches:
+      - main
 
 jobs:
   examples:
