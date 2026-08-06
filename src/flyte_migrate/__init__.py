@@ -11,6 +11,7 @@ from flyte_migrate import (  # noqa: F401
     _bigquery,
     _context,
     _deck,
+    _deploy,
     _dynamic,
     _file,
     _launchplan,
