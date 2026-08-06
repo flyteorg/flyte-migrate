@@ -12,6 +12,7 @@ from flyte_migrate import (  # noqa: F401
     _context,
     _deck,
     _dynamic,
+    _file,
     _launchplan,
     _map,
     _pod_template,
