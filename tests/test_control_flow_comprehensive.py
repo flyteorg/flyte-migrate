@@ -4,6 +4,7 @@ import functools
 from unittest.mock import MagicMock, patch
 
 import flytekit
+import pytest
 from flytekit.models import schedule as _schedule_model
 
 import flyte_migrate  # noqa: F401 — triggers patching
@@ -130,6 +131,24 @@ class TestScheduleToTrigger:
         trigger = schedule_to_trigger(name="rate_trigger", schedule=schedule)
         assert trigger is not None
         assert trigger.name == "rate_trigger"
+        assert trigger.automation.interval_minutes == 10
+
+    @pytest.mark.parametrize(
+        "unit,value,expected_minutes",
+        [
+            (_schedule_model.Schedule.FixedRateUnit.MINUTE, 10, 10),
+            (_schedule_model.Schedule.FixedRateUnit.HOUR, 4, 240),
+            (_schedule_model.Schedule.FixedRateUnit.DAY, 1, 1440),
+        ],
+    )
+    def test_fixed_rate_unit_is_converted_to_minutes(self, unit, value, expected_minutes):
+        """v2 FixedRate only takes minutes; passing the v1 value through makes 4 hours mean 4 minutes."""
+        schedule = _schedule_model.Schedule(
+            kickoff_time_input_arg="",
+            rate=_schedule_model.Schedule.FixedRate(value=value, unit=unit),
+        )
+        trigger = schedule_to_trigger(name="rate_trigger", schedule=schedule)
+        assert trigger.automation.interval_minutes == expected_minutes
 
     def test_with_merged_inputs(self):
         schedule = _schedule_model.Schedule(kickoff_time_input_arg="", cron_expression="0 0 * * *")

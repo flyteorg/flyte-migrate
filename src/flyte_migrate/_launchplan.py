@@ -44,6 +44,14 @@ def merge_inputs(
     return {**default_inputs, **fixed_inputs}
 
 
+# v1 fixed-rate units expressed in minutes, which is the only unit v2 FixedRate takes.
+_FIXED_RATE_UNIT_MINUTES = {
+    _schedule_model.Schedule.FixedRateUnit.MINUTE: 1,
+    _schedule_model.Schedule.FixedRateUnit.HOUR: 60,
+    _schedule_model.Schedule.FixedRateUnit.DAY: 24 * 60,
+}
+
+
 def _resolve_automation(schedule: _schedule_model.Schedule) -> Union[Cron, FixedRate]:
     """Determine the v2 automation type from a v1 schedule model.
 
@@ -54,7 +62,9 @@ def _resolve_automation(schedule: _schedule_model.Schedule) -> Union[Cron, Fixed
         ValueError: If the schedule type is not recognised.
     """
     if schedule.rate:
-        return FixedRate(schedule.rate.value)
+        # v2 FixedRate is always expressed in minutes; v1 carries a (value, unit) pair, so
+        # passing the value straight through turns timedelta(hours=4) into 4 minutes.
+        return FixedRate(schedule.rate.value * _FIXED_RATE_UNIT_MINUTES[schedule.rate.unit])
     if schedule.cron_expression:
         return Cron(schedule.cron_expression)
     if schedule.cron_schedule.schedule:
