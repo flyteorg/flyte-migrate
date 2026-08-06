@@ -1,0 +1,23 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # trusted publishing, no API token needed
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # setuptools_scm needs tags for the version
+
+      - uses: astral-sh/setup-uv@v5
+
+      - run: uv build
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
