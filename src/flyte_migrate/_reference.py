@@ -58,12 +58,15 @@ def reference_task_shim(
     project: str,
     domain: str,
     name: str,
-    version: str,
+    version: str | None = None,
 ) -> Callable:
     """Drop-in replacement for ``flytekit.reference_task``.
 
     Returns a decorator that ignores the stub function body and instead returns
     a sync-safe wrapper around a v2 ``LazyEntity`` pointing to the remote task.
+
+    Unlike v1, ``version`` may be omitted — the latest registered version of the
+    task is then resolved at call time (v2 ``auto_version="latest"``).
     """
 
     def wrapper(fn: Callable[..., Any]) -> Any:
@@ -72,10 +75,44 @@ def reference_task_shim(
             project=project,
             domain=domain,
             version=version,
+            auto_version="latest" if version is None else None,
         )
         return _SyncLazyEntity(entity)
 
     return wrapper
 
 
+def reference_launch_plan_shim(
+    project: str,
+    domain: str,
+    name: str,
+    version: str | None = None,
+) -> Callable:
+    """Drop-in replacement for ``flytekit.reference_launch_plan``.
+
+    v2 has no launch plan entity — v1 workflows register as tasks in the
+    ``flytekit_workflow`` environment, so ``name`` must be
+    ``flytekit_workflow.<workflow_name>``. Otherwise identical to
+    :func:`reference_task_shim`.
+    """
+    return reference_task_shim(project, domain, name, version)
+
+
+def reference_workflow_shim(
+    project: str,
+    domain: str,
+    name: str,
+    version: str | None = None,
+) -> Callable:
+    """Drop-in replacement for ``flytekit.reference_workflow``.
+
+    Shimmed v1 workflows register as tasks in the ``flytekit_workflow``
+    environment, so ``name`` must be ``flytekit_workflow.<workflow_name>``.
+    Otherwise identical to :func:`reference_task_shim`.
+    """
+    return reference_task_shim(project, domain, name, version)
+
+
 flytekit.reference_task = reference_task_shim
+flytekit.reference_launch_plan = reference_launch_plan_shim
+flytekit.reference_workflow = reference_workflow_shim
