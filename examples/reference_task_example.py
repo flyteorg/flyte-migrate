@@ -7,7 +7,7 @@ from flytekit import reference_task, task, workflow
 @reference_task(
     project="flyte-migrate",
     domain="development",
-    name="greet_env.greet",  # registered by reference_task_target.py
+    name="examples_reference_task_target_greet_env.greet",  # registered by reference_task_target.py
 )
 def remote_greet(name: str) -> str:
     """Stub — this body is never executed. The real task runs on the cluster."""

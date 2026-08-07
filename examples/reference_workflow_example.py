@@ -12,7 +12,7 @@ from flytekit import reference_workflow, task, workflow
 @reference_workflow(
     project="flyte-migrate",
     domain="development",
-    name="flytekit_workflow.greet_wf",  # deployed by reference_task_target.py
+    name="examples_reference_task_target_workflow.greet_wf",  # deployed by reference_task_target.py
 )
 def remote_greet_wf(name: str) -> str:
     """Stub — this body is never executed. The real workflow runs on the cluster."""

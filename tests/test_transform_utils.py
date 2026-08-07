@@ -13,6 +13,7 @@ from flyte_migrate._image import (
     _extract_attributes,
     _parse_platform,
     _parse_python_version,
+    _pin_to_flyte_version,
     _translate_pip_packages,
 )
 from flyte_migrate._pod_template import _transform_pod_template_v1_to_v2
@@ -225,11 +226,16 @@ class TestTranslatePipPackages:
     def test_plugin_translation_includes_both(self):
         """v2 package is added alongside v1 so remote containers can resolve v1 imports."""
         result = _translate_pip_packages(["flytekitplugins-spark", "pandas"])
-        assert result == ["flytekit", "flyteplugins-spark", "flytekitplugins-spark", "pandas"]
+        assert result == ["flytekit", _pin_to_flyte_version("flyteplugins-spark"), "flytekitplugins-spark", "pandas"]
 
     def test_plugin_with_version_specifier(self):
         result = _translate_pip_packages(["flytekitplugins-spark==1.16.3", "pandas>=2.0"])
-        assert result == ["flytekit", "flyteplugins-spark", "flytekitplugins-spark==1.16.3", "pandas>=2.0"]
+        assert result == [
+            "flytekit",
+            _pin_to_flyte_version("flyteplugins-spark"),
+            "flytekitplugins-spark==1.16.3",
+            "pandas>=2.0",
+        ]
 
     def test_plugin_with_various_specifiers(self):
         result = _translate_pip_packages(
@@ -241,11 +247,11 @@ class TestTranslatePipPackages:
         )
         assert result == [
             "flytekit",
-            "flyteplugins-pytorch",
+            _pin_to_flyte_version("flyteplugins-pytorch"),
             "flytekitplugins-kfpytorch>=1.0,<2.0",
-            "flyteplugins-ray",
+            _pin_to_flyte_version("flyteplugins-ray"),
             "flytekitplugins-ray!=0.5",
-            "flyteplugins-dask",
+            _pin_to_flyte_version("flyteplugins-dask"),
             "flytekitplugins-dask~=1.2",
         ]
 
@@ -254,7 +260,7 @@ class TestTranslatePipPackages:
         result = _translate_pip_packages(list(_PACKAGE_V1_TO_V2.keys()))
         expected = ["flytekit"]
         for v1, v2 in _PACKAGE_V1_TO_V2.items():
-            expected.extend([v2, v1])
+            expected.extend([_pin_to_flyte_version(v2), v1])
         assert result == expected
 
 

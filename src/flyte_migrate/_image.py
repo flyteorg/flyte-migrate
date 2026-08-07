@@ -8,6 +8,7 @@ The v1-to-v2 plugin package name mapping is defined in :data:`_PACKAGE_V1_TO_V2`
 """
 
 import re
+import tempfile
 from functools import cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, cast
@@ -15,8 +16,6 @@ from typing import Dict, List, Optional, Tuple, cast
 import flyte
 import flytekit
 from flyte._logging import logger
-
-from flyte_migrate._workflow import parent_env
 
 # Mapping of v1 flytekitplugins package names to their v2 flyteplugins equivalents.
 _PACKAGE_V1_TO_V2: Dict[str, str] = {
@@ -42,6 +41,9 @@ def _parse_platform(platform_str: Optional[str]) -> Optional[Tuple[str, ...]]:
     return tuple(p.strip() for p in platform_str.split(","))
 
 
+# (env name, id(spec)) pairs already folded in, so repeated tasks do not stack layers.
+_mirrored: set = set()
+
 _VERSION_SPECIFIER_RE = re.compile(r"([><=!~]+.*)")
 
 
@@ -54,6 +56,22 @@ def _strip_version_specifier(pkg: str) -> Tuple[str, str]:
     if match:
         return pkg[: match.start()], match.group(0)
     return pkg, ""
+
+
+def _pin_to_flyte_version(v2_name: str) -> str:
+    """Pin a v2 plugin package to the running ``flyte`` version.
+
+    ``flyteplugins-*`` are released in lockstep with ``flyte`` and import its
+    internals, so an unpinned plugin resolves to the latest release inside the
+    image while ``flyte`` stays at the base image's version — e.g.
+    ``ImportError: cannot import name 'system_logger' from 'flyte'``.
+
+    Dev builds of ``flyte`` have no matching release on PyPI, so leave those
+    unpinned (mirroring how flyte itself handles dev mode when building images).
+    """
+    from flyte._version import __version__
+
+    return v2_name if "dev" in __version__ else f"{v2_name}=={__version__}"
 
 
 def _translate_pip_packages(packages: Optional[List[str]]) -> List[str]:
@@ -70,7 +88,7 @@ def _translate_pip_packages(packages: Optional[List[str]]) -> List[str]:
         name, _version = _strip_version_specifier(pkg)
         v2_name = _PACKAGE_V1_TO_V2.get(name)
         if v2_name:
-            translated.append(v2_name)
+            translated.append(_pin_to_flyte_version(v2_name))
         translated.append(pkg)
     return translated
 
@@ -130,16 +148,19 @@ def _extract_attributes(parent: flytekit.ImageSpec, child: flytekit.ImageSpec) -
         if not parent.requirements:
             parent.requirements = child.requirements
         else:
-            merged_file = "merged_requirements.txt"
+            # A temp file, not a fixed name in the cwd: this runs on `import flyte_migrate`,
+            # so a relative path drops a stray file in whatever directory the user happens to
+            # be in, and the constant name means concurrent merges overwrite each other.
+            # v2 only reads and hashes the path, so it does not need to live under root_dir.
             with (
                 open(parent.requirements, "r") as f1,
                 open(child.requirements, "r") as f2,
-                open(merged_file, "w") as out,
+                tempfile.NamedTemporaryFile("w", suffix="-requirements.txt", delete=False) as out,
             ):
                 out.write(f1.read())
                 out.write("\n")
                 out.write(f2.read())
-            parent.requirements = merged_file
+            parent.requirements = out.name
     if child.copy:
         if not parent.copy:
             parent.copy = []
@@ -150,22 +171,19 @@ def _apply_image_layers(
     image: flyte.Image,
     spec: flytekit.ImageSpec,
     *,
-    mirror_to_parent: bool = True,
+    mirror: Optional[flyte.TaskEnvironment] = None,
 ) -> flyte.Image:
     """Apply package, env, command, and source layers from a v1 ImageSpec to a v2 Image.
 
-    When *mirror_to_parent* is ``True`` (the default), each layer is also applied
-    to ``parent_env.image`` so the workflow environment stays in sync with child
-    task images.
+    When *mirror* is given, each layer is also applied to that environment's image so the
+    workflow environment stays in sync with the child task images it drives.
     """
-    # parent_env.image is guaranteed to be a flyte.Image at this point
-    # (set in _build_base_image via cast), but mypy can't track this across functions.
-    parent_image = cast(flyte.Image, parent_env.image)
+    parent_image = cast(flyte.Image, mirror.image) if mirror is not None else None
 
     # apt packages
     if spec.apt_packages:
         image = image.with_apt_packages(*spec.apt_packages)
-        if mirror_to_parent:
+        if parent_image is not None:
             parent_image = parent_image.with_apt_packages(*spec.apt_packages)
 
     # pip packages — translate v1 plugin names to v2
@@ -178,25 +196,25 @@ def _apply_image_layers(
         "secret_mounts": cast(list[flyte.Secret | str] | None, pip_secret_mounts),
     }
     image = image.with_pip_packages(*pip_packages, **pip_kwargs)
-    if mirror_to_parent:
+    if parent_image is not None:
         parent_image = parent_image.with_pip_packages(*pip_packages, **pip_kwargs)
 
     # env vars
     if spec.env:
         image = image.with_env_vars(spec.env)
-        if mirror_to_parent:
+        if parent_image is not None:
             parent_image = parent_image.with_env_vars(spec.env)
 
     # commands
     if spec.commands:
         image = image.with_commands(*spec.commands)
-        if mirror_to_parent:
+        if parent_image is not None:
             parent_image = parent_image.with_commands(*spec.commands)
 
     # requirements file
     if spec.requirements:
         image = image.with_requirements(spec.requirements)
-        if mirror_to_parent:
+        if parent_image is not None:
             parent_image = parent_image.with_requirements(spec.requirements)
 
     # copy files/folders
@@ -205,18 +223,18 @@ def _apply_image_layers(
             path = Path(path_str)
             if path.is_dir():
                 image = image.with_source_folder(path)
-                if mirror_to_parent:
+                if parent_image is not None:
                     parent_image = parent_image.with_source_folder(path)
             else:
                 image = image.with_source_file(path)
-                if mirror_to_parent:
+                if parent_image is not None:
                     parent_image = parent_image.with_source_file(path)
 
     # source_root (not compatible with source_copy_mode)
     if spec.source_root:
         path = Path(spec.source_root)
         image = image.with_source_folder(path)
-        if mirror_to_parent:
+        if parent_image is not None:
             parent_image = parent_image.with_source_folder(path, copy_contents_only=True)
 
     # unsupported conda
@@ -229,8 +247,8 @@ def _apply_image_layers(
     if spec.builder in {"envd", "noop"}:
         logger.warning("envd/noop builder not supported in v2, ignoring")
 
-    if mirror_to_parent:
-        parent_env.image = parent_image
+    if mirror is not None:
+        mirror.image = parent_image
 
     return image
 
@@ -257,10 +275,66 @@ def _build_base_image(spec: flytekit.ImageSpec) -> flyte.Image:
             platform=platform,  # type: ignore[arg-type]
         )
 
-    parent_env.image = cast(flyte.Image, parent_env.image).clone(
-        name=spec.name, registry=spec.registry, python_version=python_version
-    )
     return image
+
+
+def uses_pod_template(pod_template: object, task_config: object) -> bool:
+    """Whether a v1 ``PodTemplate`` gets constructed when this task's module is imported.
+
+    Covers both ``@task(pod_template=...)`` and plugin configs that carry their own, such as
+    ``Spark(driver_pod=..., executor_pod=...)`` — the import blows up either way.
+    """
+    if pod_template is not None:
+        return True
+    return any(
+        getattr(task_config, field, None) is not None for field in ("driver_pod", "executor_pod", "pod_template")
+    )
+
+
+def needs_pip_at_runtime(task_config: object) -> bool:
+    """Whether the plugin pip-installs at run time, e.g. a Ray ``runtime_env`` with ``pip``.
+
+    Ray builds a virtualenv for the runtime_env and installs into it; the image's uv-built
+    venv has no pip to seed from, so the job dies with "No module named pip".
+    """
+    runtime_env = getattr(task_config, "runtime_env", None)
+    return isinstance(runtime_env, dict) and bool(runtime_env.get("pip"))
+
+
+def with_kubernetes_client(image: flyte.Image) -> flyte.Image:
+    """Add the ``kubernetes`` client, which a v1 ``PodTemplate`` needs at import time.
+
+    ``flytekit.PodTemplate.__post_init__`` does ``from kubernetes.client import V1PodSpec``,
+    and both the task container and the parent workflow container re-import the defining
+    module — so a task that builds a PodTemplate dies on import unless the client is in the
+    image. v1 users get it from the flytekit image; a v1 ImageSpec has to ask for it.
+
+    Idempotent: this is applied per module, so the same image is offered repeatedly and a
+    duplicate layer would change the image hash for no reason.
+    """
+    if any("kubernetes" in (getattr(layer, "packages", None) or ()) for layer in image._layers):
+        return image
+    return image.with_pip_packages("kubernetes")
+
+
+def mirror_spec_onto(env: flyte.TaskEnvironment, container_image: object) -> None:
+    """Fold a task's v1 ImageSpec into *env*'s image, so the workflow driver matches its tasks.
+
+    Kept out of :func:`_transform_image_spec_v1_to_v2` because that one is cached on the
+    spec alone, while the environment to mirror onto differs per defining module.
+    """
+    if not isinstance(container_image, flytekit.ImageSpec):
+        return
+    key = (env.name, id(container_image))
+    if key in _mirrored:
+        return
+    _mirrored.add(key)
+    base = cast(flyte.Image, env.image).clone(name=container_image.name, registry=container_image.registry)
+    # NOTE: python_version is deliberately not carried over. clone() only rewrites the
+    # declared version — the base layer stays on the local interpreter's — so a task asking
+    # for a different one fails the build with "No interpreter found for Python 3.x".
+    # The parent env only runs the workflow driver, so it does not need the task's version.
+    env.image = _apply_image_layers(base, container_image)
 
 
 @cache
