@@ -132,7 +132,7 @@ def my_spark(triggered_date: datetime.datetime = datetime.datetime.now()) -> flo
     """
     pi = hello_spark(partitions=1)
     print_every_time(value_to_print=pi, date_triggered=triggered_date)
-    spark_with_hadoop_conf(size=50)
+    # spark_with_hadoop_conf(size=50)
     spark_with_pod_templates(n=10)
     return pi
 

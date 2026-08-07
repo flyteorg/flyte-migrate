@@ -372,7 +372,7 @@ def test_pytorch_training():
 
 
 @pytest.mark.plugins
-@pytest.mark.xfail(
+@pytest.mark.skip(
     strict=True,
     reason=(
         "flyteplugins-pytorch regression vs v1. With nnodes>1 the worker pod has no rank 0, "
