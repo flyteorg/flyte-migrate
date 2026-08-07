@@ -9,7 +9,7 @@ Values are eval'd in the example module's namespace, so module-local names work
 Auth: FLYTE_API_KEY if set, else .flyte/config.yaml.
 """
 
-import importlib.util
+import importlib
 import logging
 import os
 import sys
@@ -27,11 +27,12 @@ if len(args) < 2:
 
 example_file, entrypoint, *rest = args
 
-# Load the example module from file path
-spec = importlib.util.spec_from_file_location("example_mod", example_file)
-mod = importlib.util.module_from_spec(spec)
-sys.modules["example_mod"] = mod
-spec.loader.exec_module(mod)
+# Import by real module path (examples/hello.py -> examples.hello). Loading it from the
+# file under a synthetic name would make every example look like the same module, and env
+# names are derived from __module__ — deploy and reference would then disagree.
+sys.path.insert(0, str(ROOT))
+module_path = Path(example_file).resolve().relative_to(ROOT).with_suffix("")
+mod = importlib.import_module(".".join(module_path.parts))
 
 kwargs = {}
 for arg in rest:

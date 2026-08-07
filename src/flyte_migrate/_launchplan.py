@@ -23,7 +23,7 @@ from flyte._trigger import Cron, FixedRate, Trigger
 from flytekit.models import common as _common_models
 from flytekit.models import schedule as _schedule_model
 
-from ._workflow import parent_env
+from ._workflow import parent_env_for
 
 
 def merge_inputs(
@@ -129,6 +129,7 @@ class LaunchPlanTransformer:
         if kwargs:
             logger.debug(f"Unsupported args in v2 trigger {kwargs.values()}")
 
+        parent_env = parent_env_for(workflow.func.__module__)
         task_name = parent_env.name + "." + workflow.func.__name__
         if task_name not in parent_env._tasks:
             return parent_env

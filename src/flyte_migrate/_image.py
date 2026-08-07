@@ -16,8 +16,6 @@ import flyte
 import flytekit
 from flyte._logging import logger
 
-from flyte_migrate._workflow import parent_env
-
 # Mapping of v1 flytekitplugins package names to their v2 flyteplugins equivalents.
 _PACKAGE_V1_TO_V2: Dict[str, str] = {
     "flytekitplugins-spark": "flyteplugins-spark",
@@ -41,6 +39,9 @@ def _parse_platform(platform_str: Optional[str]) -> Optional[Tuple[str, ...]]:
         return None
     return tuple(p.strip() for p in platform_str.split(","))
 
+
+# (env name, id(spec)) pairs already folded in, so repeated tasks do not stack layers.
+_mirrored: set = set()
 
 _VERSION_SPECIFIER_RE = re.compile(r"([><=!~]+.*)")
 
@@ -166,22 +167,19 @@ def _apply_image_layers(
     image: flyte.Image,
     spec: flytekit.ImageSpec,
     *,
-    mirror_to_parent: bool = True,
+    mirror: Optional[flyte.TaskEnvironment] = None,
 ) -> flyte.Image:
     """Apply package, env, command, and source layers from a v1 ImageSpec to a v2 Image.
 
-    When *mirror_to_parent* is ``True`` (the default), each layer is also applied
-    to ``parent_env.image`` so the workflow environment stays in sync with child
-    task images.
+    When *mirror* is given, each layer is also applied to that environment's image so the
+    workflow environment stays in sync with the child task images it drives.
     """
-    # parent_env.image is guaranteed to be a flyte.Image at this point
-    # (set in _build_base_image via cast), but mypy can't track this across functions.
-    parent_image = cast(flyte.Image, parent_env.image)
+    parent_image = cast(flyte.Image, mirror.image) if mirror is not None else None
 
     # apt packages
     if spec.apt_packages:
         image = image.with_apt_packages(*spec.apt_packages)
-        if mirror_to_parent:
+        if parent_image is not None:
             parent_image = parent_image.with_apt_packages(*spec.apt_packages)
 
     # pip packages — translate v1 plugin names to v2
@@ -194,25 +192,25 @@ def _apply_image_layers(
         "secret_mounts": cast(list[flyte.Secret | str] | None, pip_secret_mounts),
     }
     image = image.with_pip_packages(*pip_packages, **pip_kwargs)
-    if mirror_to_parent:
+    if parent_image is not None:
         parent_image = parent_image.with_pip_packages(*pip_packages, **pip_kwargs)
 
     # env vars
     if spec.env:
         image = image.with_env_vars(spec.env)
-        if mirror_to_parent:
+        if parent_image is not None:
             parent_image = parent_image.with_env_vars(spec.env)
 
     # commands
     if spec.commands:
         image = image.with_commands(*spec.commands)
-        if mirror_to_parent:
+        if parent_image is not None:
             parent_image = parent_image.with_commands(*spec.commands)
 
     # requirements file
     if spec.requirements:
         image = image.with_requirements(spec.requirements)
-        if mirror_to_parent:
+        if parent_image is not None:
             parent_image = parent_image.with_requirements(spec.requirements)
 
     # copy files/folders
@@ -221,18 +219,18 @@ def _apply_image_layers(
             path = Path(path_str)
             if path.is_dir():
                 image = image.with_source_folder(path)
-                if mirror_to_parent:
+                if parent_image is not None:
                     parent_image = parent_image.with_source_folder(path)
             else:
                 image = image.with_source_file(path)
-                if mirror_to_parent:
+                if parent_image is not None:
                     parent_image = parent_image.with_source_file(path)
 
     # source_root (not compatible with source_copy_mode)
     if spec.source_root:
         path = Path(spec.source_root)
         image = image.with_source_folder(path)
-        if mirror_to_parent:
+        if parent_image is not None:
             parent_image = parent_image.with_source_folder(path, copy_contents_only=True)
 
     # unsupported conda
@@ -245,8 +243,8 @@ def _apply_image_layers(
     if spec.builder in {"envd", "noop"}:
         logger.warning("envd/noop builder not supported in v2, ignoring")
 
-    if mirror_to_parent:
-        parent_env.image = parent_image
+    if mirror is not None:
+        mirror.image = parent_image
 
     return image
 
@@ -273,13 +271,27 @@ def _build_base_image(spec: flytekit.ImageSpec) -> flyte.Image:
             platform=platform,  # type: ignore[arg-type]
         )
 
-    # NOTE: python_version is deliberately not mirrored onto the parent image. clone()
-    # only rewrites the declared version — the base layer stays on the local interpreter's
-    # version, so a task asking for a different one fails the build with
-    # "No interpreter found for Python 3.x in managed installations or search path".
-    # The parent env only runs the workflow driver, so it does not need the task's version.
-    parent_env.image = cast(flyte.Image, parent_env.image).clone(name=spec.name, registry=spec.registry)
     return image
+
+
+def mirror_spec_onto(env: flyte.TaskEnvironment, container_image: object) -> None:
+    """Fold a task's v1 ImageSpec into *env*'s image, so the workflow driver matches its tasks.
+
+    Kept out of :func:`_transform_image_spec_v1_to_v2` because that one is cached on the
+    spec alone, while the environment to mirror onto differs per defining module.
+    """
+    if not isinstance(container_image, flytekit.ImageSpec):
+        return
+    key = (env.name, id(container_image))
+    if key in _mirrored:
+        return
+    _mirrored.add(key)
+    base = cast(flyte.Image, env.image).clone(name=container_image.name, registry=container_image.registry)
+    # NOTE: python_version is deliberately not carried over. clone() only rewrites the
+    # declared version — the base layer stays on the local interpreter's — so a task asking
+    # for a different one fails the build with "No interpreter found for Python 3.x".
+    # The parent env only runs the workflow driver, so it does not need the task's version.
+    env.image = _apply_image_layers(base, container_image)
 
 
 @cache

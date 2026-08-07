@@ -1,13 +1,9 @@
 name: Integration Tests
 
-# Runs every example in examples/ against a real Flyte v2 cluster.
+# Runs every example in examples/ against a real Flyte v2 cluster, plugins included.
+# To skip the plugin examples locally: -m "integration and not plugins"
 on:
   workflow_dispatch:
-    inputs:
-      include_plugins:
-        description: "also run Spark/Ray/Dask/PyTorch/BigQuery examples"
-        type: boolean
-        default: false
   schedule:
     - cron: "0 7 * * *"
   pull_request:
@@ -41,5 +37,4 @@ jobs:
           FLYTE_API_KEY: ${{ secrets.FLYTE_API_KEY }}
           FLYTE_PROJECT: flyte-migrate
           FLYTE_DOMAIN: development
-          MARKERS: ${{ inputs.include_plugins && 'integration' || 'integration and not plugins' }}
-        run: uv run pytest -n 5 tests/integration -v -s -m "$MARKERS"
+        run: uv run pytest -n 5 tests/integration -v -s -m integration

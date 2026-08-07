@@ -15,20 +15,16 @@ from flyte._logging import logger
 from flytekit.extras.accelerators import BaseAccelerator
 
 from flyte_migrate._deploy import inherited_sys_path
-from flyte_migrate._image import _transform_image_spec_v1_to_v2
+from flyte_migrate._image import _transform_image_spec_v1_to_v2, mirror_spec_onto
 from flyte_migrate._plugins import _transform_plugin_config_v1_to_v2
 from flyte_migrate._pod_template import _transform_pod_template_v1_to_v2
 from flyte_migrate._resource import _transform_resource_v1_to_v2
 from flyte_migrate._secret import _transform_secret_v1_to_v2
-from flyte_migrate._workflow import parent_env
+from flyte_migrate._workflow import module_slug, parent_env_for
 
 P = ParamSpec("P")  # capture the function's parameters
 R = TypeVar("R")  # return type
 T = TypeVar("T")  # task config
-
-# Map a v1 task to one of the v2 env
-_task_to_env: Dict[str, flyte.TaskEnvironment] = {}
-
 
 # ---------------------------------------------------------------------------
 # Helpers — each responsible for one aspect of the v1 → v2 translation
@@ -67,7 +63,7 @@ def _build_task_environment(
     images, pod templates, plugin configs, and cache policy are all converted here.
     """
     return flyte.TaskEnvironment(
-        name=task_function.__name__ + "_env",
+        name=f"{module_slug(task_function.__module__)}_{task_function.__name__}_env",
         resources=_transform_resource_v1_to_v2(requests, limits, resources, accelerator, shared_memory),
         pod_template=_transform_pod_template_v1_to_v2(pod_template) or pod_template_name,
         secrets=_transform_secret_v1_to_v2(secret_requests),
@@ -82,11 +78,13 @@ def _build_task_environment(
 def _register_task_environment(
     env: flyte.TaskEnvironment,
     container_image: Optional[Union[str, flytekit.ImageSpec]],
+    module: Optional[str],
 ) -> None:
-    """Register a newly created environment and wire it into the parent workflow env."""
-    parent_env.depends_on.append(env)
-    image_key = str(_transform_image_spec_v1_to_v2(container_image))
-    _task_to_env[image_key] = env
+    """Wire a newly created environment into the parent workflow env of its own module."""
+    parent = parent_env_for(module)
+    if env not in parent.depends_on:
+        parent.depends_on.append(env)
+    mirror_spec_onto(parent, container_image)
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +142,7 @@ def task_shim(
             pod_template=pod_template,
             pod_template_name=pod_template_name,
         )
-        _register_task_environment(env, container_image)
+        _register_task_environment(env, container_image, _task_function.__module__)
         return env.task(
             retries=retries,
             report=bool(enable_deck),
