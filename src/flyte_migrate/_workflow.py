@@ -12,6 +12,7 @@ as dependencies of ``parent_env`` via ``parent_env.depends_on``.
 import importlib.metadata
 import os
 import re
+from pathlib import Path
 
 import flytekit
 from flyte import Image, Resources, TaskEnvironment
@@ -36,10 +37,24 @@ def _flyte_migrate_requirement() -> str:
     return f"flyte-migrate=={version}" if re.fullmatch(r"[\d.]+", version) else "flyte-migrate"
 
 
+def _with_flyte_migrate(image: Image) -> Image:
+    """Layer flyte-migrate onto an image.
+
+    Normally a pip requirement, but when ``FLYTE_MIGRATE_SPEC`` points at a local wheel
+    (upgrade bootstrap pods, air-gapped installs) the wheel itself is copied into the
+    build context so the remote image builder needs no package index or repo access.
+    """
+    spec = _flyte_migrate_requirement()
+    path = Path(spec)
+    if spec.endswith(".whl") and path.exists():
+        return image.with_source_file(path, ".").with_commands([f"pip install ./{path.name}"])
+    return image.with_pip_packages(spec)
+
+
 parent_env = TaskEnvironment(
     name="flytekit_workflow",
     resources=Resources(cpu=0.8, memory="800Mi"),
-    image=Image.from_debian_base().with_pip_packages("setuptools", "flytekit", _flyte_migrate_requirement()),
+    image=_with_flyte_migrate(Image.from_debian_base().with_pip_packages("setuptools", "flytekit")),
 )
 
 
