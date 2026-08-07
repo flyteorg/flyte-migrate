@@ -16,7 +16,7 @@ import flyte
 import flytekit
 from flyte._logging import logger
 
-from flyte_migrate._workflow import parent_env
+from flyte_migrate._workflow import _flyte_migrate_requirement, parent_env
 
 # Mapping of v1 flytekitplugins package names to their v2 flyteplugins equivalents.
 _PACKAGE_V1_TO_V2: Dict[str, str] = {
@@ -276,17 +276,23 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
     Note: ``conda_packages`` / ``conda_channels`` are not supported in v2.
     ``cuda`` / ``cudnn`` are handled automatically by the Docker builder.
     """
+    # Pre-built v2 images are passed through untouched; everything else gets flyte-migrate
+    # installed so `import flyte_migrate` resolves inside the container.
     if isinstance(container_image, flytekit.ImageSpec):
         image = _build_base_image(container_image)
         image = _apply_image_layers(image, container_image)
+        image = image.with_pip_packages(_flyte_migrate_requirement())
     elif isinstance(container_image, str):
-        image = flyte.Image.from_base(container_image).with_pip_packages("flyte")
+        # from_base images are unnamed and non-extendable by default and would reject pip layers.
+        image = (
+            flyte.Image.from_base(container_image)
+            .clone(name="flyte-migrate-image", extendable=True)
+            .with_pip_packages("flyte", _flyte_migrate_requirement())
+        )
     elif isinstance(container_image, flyte.Image):
         image = container_image
     elif container_image is None:
-        image = flyte.Image.from_debian_base().with_pip_packages("flytekit")
+        image = flyte.Image.from_debian_base().with_pip_packages("flytekit", _flyte_migrate_requirement())
     else:
         raise ValueError(f"Unsupported container_image type: {type(container_image)}")
-
-    # TODO: Install flyte-migrate in non-editable mode
     return image

@@ -5,10 +5,14 @@ description = "migrate v1 workflows to v2"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "flyte",
+    # cli.py imports private flyte.cli internals; bound the version to catch breakage deliberately
+    "flyte>=2.0.10a0,<2.1",
     "flytekit",
     "flyteidl2",
 ]
+
+[project.scripts]
+pyflyte-migrate = "flyte_migrate.cli:main"
 
 [build-system]
 requires = ["setuptools", "setuptools_scm"]

@@ -9,13 +9,31 @@ All child task environments created by :mod:`flyte_migrate._task` register thems
 as dependencies of ``parent_env`` via ``parent_env.depends_on``.
 """
 
+import importlib.metadata
+import re
+
 import flytekit
 from flyte import Image, Resources, TaskEnvironment
+
+
+def _flyte_migrate_requirement() -> str:
+    """Pip requirement that makes ``import flyte_migrate`` resolve inside remote containers.
+
+    Pinned to the installed release; dev/local versions (e.g. ``0.1.dev3+g1234``)
+    don't exist on PyPI, so fall back to unpinned — for dev runs the code bundle's
+    synced sys.path shadows the installed copy anyway.
+    """
+    try:
+        version = importlib.metadata.version("flyte-migrate")
+    except importlib.metadata.PackageNotFoundError:
+        return "flyte-migrate"
+    return f"flyte-migrate=={version}" if re.fullmatch(r"[\d.]+", version) else "flyte-migrate"
+
 
 parent_env = TaskEnvironment(
     name="flytekit_workflow",
     resources=Resources(cpu=0.8, memory="800Mi"),
-    image=Image.from_debian_base().with_pip_packages("setuptools", "flytekit"),
+    image=Image.from_debian_base().with_pip_packages("setuptools", "flytekit", _flyte_migrate_requirement()),
 )
 
 flytekit.workflow = parent_env.task
