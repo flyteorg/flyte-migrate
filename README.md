@@ -7,8 +7,8 @@
 <p align="center">
   <a href="https://github.com/flyteorg/flyte-migrate/actions"><img src="https://github.com/flyteorg/flyte-migrate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://pypi.org/project/flyte-migrate/"><img src="https://img.shields.io/pypi/v/flyte-migrate" alt="PyPI"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/pypi/pyversions/flyte-migrate" alt="Python"></a>
-  <a href="https://github.com/flyteorg/flyte-migrate/blob/main/LICENSE"><img src="https://img.shields.io/github/license/flyteorg/flyte-migrate" alt="License"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python"></a>
+  <a href="https://github.com/flyteorg/flyte-migrate/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License"></a>
 </p>
 
 ---
