@@ -37,4 +37,4 @@ jobs:
           FLYTE_API_KEY: ${{ secrets.FLYTE_API_KEY }}
           FLYTE_PROJECT: flyte-migrate
           FLYTE_DOMAIN: development
-        run: uv run pytest -n 5 tests/integration -v -s -m integration
+        run: uv run pytest -n 10 tests/integration -v -s -m integration
