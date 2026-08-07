@@ -278,6 +278,45 @@ def _build_base_image(spec: flytekit.ImageSpec) -> flyte.Image:
     return image
 
 
+def uses_pod_template(pod_template: object, task_config: object) -> bool:
+    """Whether a v1 ``PodTemplate`` gets constructed when this task's module is imported.
+
+    Covers both ``@task(pod_template=...)`` and plugin configs that carry their own, such as
+    ``Spark(driver_pod=..., executor_pod=...)`` — the import blows up either way.
+    """
+    if pod_template is not None:
+        return True
+    return any(
+        getattr(task_config, field, None) is not None for field in ("driver_pod", "executor_pod", "pod_template")
+    )
+
+
+def needs_pip_at_runtime(task_config: object) -> bool:
+    """Whether the plugin pip-installs at run time, e.g. a Ray ``runtime_env`` with ``pip``.
+
+    Ray builds a virtualenv for the runtime_env and installs into it; the image's uv-built
+    venv has no pip to seed from, so the job dies with "No module named pip".
+    """
+    runtime_env = getattr(task_config, "runtime_env", None)
+    return isinstance(runtime_env, dict) and bool(runtime_env.get("pip"))
+
+
+def with_kubernetes_client(image: flyte.Image) -> flyte.Image:
+    """Add the ``kubernetes`` client, which a v1 ``PodTemplate`` needs at import time.
+
+    ``flytekit.PodTemplate.__post_init__`` does ``from kubernetes.client import V1PodSpec``,
+    and both the task container and the parent workflow container re-import the defining
+    module — so a task that builds a PodTemplate dies on import unless the client is in the
+    image. v1 users get it from the flytekit image; a v1 ImageSpec has to ask for it.
+
+    Idempotent: this is applied per module, so the same image is offered repeatedly and a
+    duplicate layer would change the image hash for no reason.
+    """
+    if any("kubernetes" in (getattr(layer, "packages", None) or ()) for layer in image._layers):
+        return image
+    return image.with_pip_packages("kubernetes")
+
+
 def mirror_spec_onto(env: flyte.TaskEnvironment, container_image: object) -> None:
     """Fold a task's v1 ImageSpec into *env*'s image, so the workflow driver matches its tasks.
 

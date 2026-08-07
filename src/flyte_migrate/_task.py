@@ -7,7 +7,7 @@ delegated to focused helper functions so the top-level decorator stays readable.
 """
 
 import datetime
-from typing import Callable, Dict, List, Literal, Optional, ParamSpec, TypeVar, Union
+from typing import Callable, Dict, List, Literal, Optional, ParamSpec, TypeVar, Union, cast
 
 import flyte
 import flytekit
@@ -15,12 +15,22 @@ from flyte._logging import logger
 from flytekit.extras.accelerators import BaseAccelerator
 
 from flyte_migrate._deploy import inherited_sys_path
-from flyte_migrate._image import _transform_image_spec_v1_to_v2, mirror_spec_onto
+from flyte_migrate._image import (
+    _transform_image_spec_v1_to_v2,
+    mirror_spec_onto,
+    needs_pip_at_runtime,
+    uses_pod_template,
+    with_kubernetes_client,
+)
 from flyte_migrate._plugins import _transform_plugin_config_v1_to_v2
 from flyte_migrate._pod_template import _transform_pod_template_v1_to_v2
 from flyte_migrate._resource import _transform_resource_v1_to_v2
 from flyte_migrate._secret import _transform_secret_v1_to_v2
 from flyte_migrate._workflow import module_slug, parent_env_for
+
+# Modules known to build a v1 PodTemplate at import time; every task env from one needs
+# the kubernetes client, whichever task actually declared the template.
+_pod_template_modules: set = set()
 
 P = ParamSpec("P")  # capture the function's parameters
 R = TypeVar("R")  # return type
@@ -62,13 +72,19 @@ def _build_task_environment(
     This is where the bulk of the v1 → v2 translation happens: resources, secrets,
     images, pod templates, plugin configs, and cache policy are all converted here.
     """
+    image = _transform_image_spec_v1_to_v2(container_image)
+    if task_function.__module__ in _pod_template_modules or uses_pod_template(pod_template, task_config):
+        image = with_kubernetes_client(image)
+    if needs_pip_at_runtime(task_config):
+        image = image.with_pip_packages("pip")
+
     return flyte.TaskEnvironment(
         name=f"{module_slug(task_function.__module__)}_{task_function.__name__}_env",
         resources=_transform_resource_v1_to_v2(requests, limits, resources, accelerator, shared_memory),
         pod_template=_transform_pod_template_v1_to_v2(pod_template) or pod_template_name,
         secrets=_transform_secret_v1_to_v2(secret_requests),
         env_vars={**inherited_sys_path(), **(environment or {})} or None,
-        image=_transform_image_spec_v1_to_v2(container_image),
+        image=image,
         cache=_translate_cache_policy(cache),
         plugin_config=_transform_plugin_config_v1_to_v2(task_config),
         description=docs.short_description if docs else None,
@@ -79,12 +95,23 @@ def _register_task_environment(
     env: flyte.TaskEnvironment,
     container_image: Optional[Union[str, flytekit.ImageSpec]],
     module: Optional[str],
+    pod_template: Optional[flytekit.PodTemplate] = None,
+    task_config: object = None,
 ) -> None:
     """Wire a newly created environment into the parent workflow env of its own module."""
     parent = parent_env_for(module)
     if env not in parent.depends_on:
         parent.depends_on.append(env)
     mirror_spec_onto(parent, container_image)
+    if uses_pod_template(pod_template, task_config):
+        # Containers re-import the whole defining module, so a PodTemplate built anywhere in
+        # it breaks the import for *every* task there, plus the parent workflow container —
+        # not just the task that declared it. Backfill the ones already built, and remember
+        # the module so later tasks in it get the client too.
+        _pod_template_modules.add(module)
+        parent.image = with_kubernetes_client(cast(flyte.Image, parent.image))
+        for sibling in parent.depends_on:
+            sibling.image = with_kubernetes_client(cast(flyte.Image, sibling.image))
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +169,7 @@ def task_shim(
             pod_template=pod_template,
             pod_template_name=pod_template_name,
         )
-        _register_task_environment(env, container_image, _task_function.__module__)
+        _register_task_environment(env, container_image, _task_function.__module__, pod_template, task_config)
         return env.task(
             retries=retries,
             report=bool(enable_deck),
