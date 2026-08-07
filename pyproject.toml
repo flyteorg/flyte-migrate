@@ -4,6 +4,12 @@ dynamic = ["version"]
 description = "migrate v1 workflows to v2"
 readme = "README.md"
 requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
 dependencies = [
     # cli.py imports private flyte.cli internals; the CLI unit tests smoke-test compatibility in CI
     "flyte>=2.5.18",
