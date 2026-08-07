@@ -248,7 +248,16 @@ def _apply_image_layers(
 
 
 def _build_base_image(spec: flytekit.ImageSpec) -> flyte.Image:
-    """Create the initial v2 Image from a v1 ImageSpec's base_image, registry, and platform."""
+    """Create the initial v2 Image from a v1 ImageSpec's base_image and platform.
+
+    The v1 ``registry`` is deliberately **not** carried over. It records where the v1 image was
+    *pulled* from, which is not necessarily somewhere this cluster may *push* to — e.g. images
+    built as ``public.ecr.aws/unionai/flytekit`` fail the derived build with
+    ``failed to push ...: 401 Unauthorized``. Leaving the registry unset makes the remote
+    builder fall back to the backend's own default registry (see ``remote_builder.build_image``),
+    which the tenant can always push to. The ``name`` is still needed: ``Image.clone`` refuses to
+    add layers to an unnamed image.
+    """
     python_version = _parse_python_version(spec.python_version)
     platform = _parse_platform(spec.platform)
 
@@ -258,20 +267,17 @@ def _build_base_image(spec: flytekit.ImageSpec) -> flyte.Image:
     if isinstance(spec.base_image, str):
         image = (
             flyte.Image.from_base(spec.base_image)
-            .clone(name=spec.name, python_version=python_version, registry=spec.registry, extendable=True)
+            .clone(name=spec.name, python_version=python_version, extendable=True)
             .with_pip_packages("flyte", pre=True)
         )
     else:
         image = flyte.Image.from_debian_base(
             name=spec.name,
             python_version=python_version,
-            registry=spec.registry,
             platform=platform,  # type: ignore[arg-type]
         )
 
-    parent_env.image = cast(flyte.Image, parent_env.image).clone(
-        name=spec.name, registry=spec.registry, python_version=python_version
-    )
+    parent_env.image = cast(flyte.Image, parent_env.image).clone(name=spec.name, python_version=python_version)
     return image
 
 
