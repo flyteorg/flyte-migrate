@@ -57,6 +57,10 @@ include = ["flyte_migrate*"]
 
 [tool.setuptools_scm]
 root = "."
+# Lets pip install from a git-less source tree (e.g. a GitHub tarball URL inside a
+# user's v1 container during the upgrade flow). Real releases still get their
+# version from git tags.
+fallback_version = "0.0.0.dev0"
 
 [tool.pytest.ini_options]
 norecursedirs = []
