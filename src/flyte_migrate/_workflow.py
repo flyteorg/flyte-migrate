@@ -10,6 +10,7 @@ as dependencies of ``parent_env`` via ``parent_env.depends_on``.
 """
 
 import importlib.metadata
+import os
 import re
 
 import flytekit
@@ -19,10 +20,15 @@ from flyte import Image, Resources, TaskEnvironment
 def _flyte_migrate_requirement() -> str:
     """Pip requirement that makes ``import flyte_migrate`` resolve inside remote containers.
 
-    Pinned to the installed release; dev/local versions (e.g. ``0.1.dev3+g1234``)
-    don't exist on PyPI, so fall back to unpinned — for dev runs the code bundle's
-    synced sys.path shadows the installed copy anyway.
+    The ``FLYTE_MIGRATE_SPEC`` env var overrides everything (the v1→v2 upgrade flow sets
+    it so the bootstrap pod and all child images install the exact same build, which may
+    be a git ref rather than a PyPI release). Otherwise pinned to the installed release;
+    dev/local versions (e.g. ``0.1.dev3+g1234``) don't exist on PyPI, so fall back to
+    unpinned — for dev runs the code bundle's synced sys.path shadows the installed copy.
     """
+    spec = os.environ.get("FLYTE_MIGRATE_SPEC")
+    if spec:
+        return spec
     try:
         version = importlib.metadata.version("flyte-migrate")
     except importlib.metadata.PackageNotFoundError:
