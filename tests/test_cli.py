@@ -100,6 +100,69 @@ def test_run_remote_flag(runner, monkeypatch, tmp_path):
     assert calls[0]["mode"] == "remote"
 
 
+def test_run_v1_flags_map_to_runcontext(runner, monkeypatch, tmp_path):
+    filename = _write_wf(tmp_path, "v1flags")
+    calls = []
+    monkeypatch.setattr(flyte, "with_runcontext", _fake_runcontext(calls))
+    result = runner.invoke(
+        main,
+        [
+            "run",
+            "--envvars",
+            "A=1",
+            "--env",
+            "B=2",
+            "--labels",
+            "team=ml",
+            "--annotations",
+            "note=x",
+            "--overwrite-cache",
+            "--interruptible",
+            "true",
+            "--copy",
+            "auto",
+            filename,
+            "v1flags_wf",
+            "--x",
+            "3",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    kwargs = calls[0]
+    assert kwargs["env_vars"] == {"A": "1", "B": "2"}
+    assert kwargs["labels"] == {"team": "ml"}
+    assert kwargs["annotations"] == {"note": "x"}
+    assert kwargs["overwrite_cache"] is True
+    assert kwargs["interruptible"] is True
+    assert kwargs["copy_style"] == "loaded_modules"
+
+
+def test_run_short_remote_flag_and_copy_all(runner, monkeypatch, tmp_path):
+    filename = _write_wf(tmp_path, "shortr")
+    calls = []
+    monkeypatch.setattr(flyte, "with_runcontext", _fake_runcontext(calls))
+    result = runner.invoke(
+        main, ["run", "-r", "-p", "proj", "-d", "dev", "--copy-all", filename, "shortr_wf", "--x", "1"]
+    )
+    assert result.exit_code == 0, result.output
+    assert calls[0]["mode"] == "remote"
+    assert calls[0]["copy_style"] == "all"
+
+
+def test_run_ignored_v1_flags_warn(runner, monkeypatch, tmp_path):
+    filename = _write_wf(tmp_path, "ignwf")
+    calls = []
+    monkeypatch.setattr(flyte, "with_runcontext", _fake_runcontext(calls))
+    result = runner.invoke(
+        main, ["run", "--max-parallelism", "5", "--tags", "a", "--wait", filename, "ignwf_wf", "--x", "1"]
+    )
+    assert result.exit_code == 0, result.output
+    assert calls[0]["mode"] == "local"
+    combined = result.output + (result.stderr or "")
+    assert "--max-parallelism" in combined
+    assert "ignored" in combined
+
+
 def test_run_local_end_to_end(runner, tmp_path):
     filename = _write_wf(tmp_path, "e2ewf")
     result = runner.invoke(main, ["run", filename, "e2ewf_wf", "--x", "4"])
@@ -144,6 +207,40 @@ def test_register_directory(runner, monkeypatch, tmp_path):
     names = [env.name for env in parent_env.depends_on]
     assert any("rega_double" in n for n in names)
     assert any("regb_double" in n for n in names)
+
+
+def test_register_v1_flags(runner, monkeypatch, tmp_path):
+    filename = _write_wf(tmp_path, "regv1")
+    broken = tmp_path / "broken.py"
+    broken.write_text("raise RuntimeError('boom')\n")
+    captured = {}
+
+    def fake_deploy(env, **kwargs):
+        captured.update(kwargs)
+        return [SimpleNamespace(env_repr=list, table_repr=list)]
+
+    monkeypatch.setattr(flyte, "deploy", fake_deploy)
+    result = runner.invoke(
+        main,
+        [
+            "register",
+            "--dry-run",
+            "--copy",
+            "none",
+            "--skip-errors",
+            "-i",
+            "myimg=ghcr.io/x/y:1",
+            "--service-account",
+            "sa",
+            "broken.py",
+            filename,
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["copy_style"] == "none"
+    combined = result.output + (result.stderr or "")
+    assert "skipping" in combined  # broken.py skipped, not fatal
+    assert "--service-account" in combined  # warned as ignored
 
 
 def test_register_no_python_files(runner, tmp_path):
