@@ -86,15 +86,17 @@ Installing `flyte-migrate` also gives you `pyflyte-migrate`, which mirrors the `
 against a v2 cluster. Files driven by the CLI don't need the `import flyte_migrate` line —
 the shim is applied automatically before your file is loaded.
 
+Try it on the examples in this repo:
+
 ```bash
 # Run locally (pyflyte semantics: local by default)
-pyflyte-migrate run wf.py my_workflow --data=hello
+pyflyte-migrate run examples/hello.py wf --name=flyte
 
 # Run on the v2 cluster
-pyflyte-migrate run --remote -p my-project -d development wf.py my_workflow --data=hello
+pyflyte-migrate run --remote -p my-project -d development examples/hello.py wf --name=flyte
 
 # Register (deploy) workflows from files or directories
-pyflyte-migrate register -p my-project -d development workflows/
+pyflyte-migrate register -p my-project -d development examples/hello.py examples/launchplan.py
 ```
 
 Cluster connection uses the standard v2 config discovery (`./config.yaml`, `.flyte/config.yaml`,
