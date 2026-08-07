@@ -358,6 +358,16 @@ def test_pytorch_training():
 
 
 @pytest.mark.plugins
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "flyteplugins-pytorch regression vs v1. With nnodes>1 the worker pod has no rank 0, "
+        "and task.py:373 does `result = out[0] if 0 in out else None` — that None is then "
+        "serialized against the task's `-> float` and rejected. v1 raised IgnoreOutputs() so "
+        "non-master replicas wrote no outputs at all (flytekitplugins/kfpytorch/task.py:487). "
+        "v2 has no IgnoreOutputs equivalent, so the shim cannot bridge it; needs an upstream fix."
+    ),
+)
 def test_pytorch_multinode():
     from examples.plugins.pytorch_example import pytorch_multinode_wf
 
