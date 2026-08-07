@@ -280,6 +280,10 @@ def test_flyte_migrate_requirement(monkeypatch):
     monkeypatch.setattr(importlib.metadata, "version", lambda name: "1.2.3")
     assert _flyte_migrate_requirement() == "flyte-migrate==1.2.3"
 
+    # Pre-releases are on PyPI and pin cleanly too.
+    monkeypatch.setattr(importlib.metadata, "version", lambda name: "0.0.2b1")
+    assert _flyte_migrate_requirement() == "flyte-migrate==0.0.2b1"
+
     # FLYTE_MIGRATE_SPEC overrides everything (upgrade flow: same build everywhere).
     monkeypatch.setenv("FLYTE_MIGRATE_SPEC", "git+https://example.com/flyte-migrate@branch")
     assert _flyte_migrate_requirement() == "git+https://example.com/flyte-migrate@branch"

@@ -34,7 +34,9 @@ def _flyte_migrate_requirement() -> str:
         version = importlib.metadata.version("flyte-migrate")
     except importlib.metadata.PackageNotFoundError:
         return "flyte-migrate"
-    return f"flyte-migrate=={version}" if re.fullmatch(r"[\d.]+", version) else "flyte-migrate"
+    # Releases and pre-releases (0.0.2b1, 1.0rc1) exist on PyPI and can be pinned exactly;
+    # dev/local builds cannot.
+    return f"flyte-migrate=={version}" if re.fullmatch(r"[\d.]+((a|b|rc)\d+)?", version) else "flyte-migrate"
 
 
 def _with_flyte_migrate(image: Image) -> Image:
