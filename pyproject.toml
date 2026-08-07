@@ -11,10 +11,14 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "flyte",
+    # cli.py imports private flyte.cli internals; the CLI unit tests smoke-test compatibility in CI
+    "flyte>=2.5.18",
     "flytekit",
     "flyteidl2",
 ]
+
+[project.scripts]
+pyflyte-migrate = "flyte_migrate.cli:main"
 
 [build-system]
 requires = ["setuptools", "setuptools_scm"]
