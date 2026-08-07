@@ -56,6 +56,18 @@ def _strip_version_specifier(pkg: str) -> Tuple[str, str]:
     return pkg, ""
 
 
+def _spec_attr(spec: "flytekit.ImageSpec", name: str):
+    """Read an optional ``ImageSpec`` field, tolerating older flytekit.
+
+    The shim runs inside the *user's* image, so it meets whatever flytekit that image was
+    built with — as old as 1.13.x in practice. ``ImageSpec`` has grown fields over time
+    (``pip_secret_mounts``, ``pip_extra_args`` and ``copy`` are all absent in 1.13.5), and a
+    plain attribute access there raises ``AttributeError`` and kills the whole run. Missing
+    means "not configured", which is exactly the ``None`` the v2 builders already expect.
+    """
+    return getattr(spec, name, None)
+
+
 def _translate_pip_packages(packages: Optional[List[str]]) -> List[str]:
     """Translate v1 pip package names to v2 equivalents.
 
@@ -170,11 +182,11 @@ def _apply_image_layers(
 
     # pip packages — translate v1 plugin names to v2
     pip_packages = _translate_pip_packages(spec.packages)
-    pip_secret_mounts = _build_pip_secret_mounts(spec.pip_secret_mounts)
+    pip_secret_mounts = _build_pip_secret_mounts(_spec_attr(spec, "pip_secret_mounts"))
     pip_kwargs = {
         "index_url": spec.pip_index,
         "extra_index_urls": spec.pip_extra_index_url,
-        "extra_args": spec.pip_extra_args,
+        "extra_args": _spec_attr(spec, "pip_extra_args"),
         "secret_mounts": cast(list[flyte.Secret | str] | None, pip_secret_mounts),
     }
     image = image.with_pip_packages(*pip_packages, **pip_kwargs)
@@ -200,8 +212,8 @@ def _apply_image_layers(
             parent_image = parent_image.with_requirements(spec.requirements)
 
     # copy files/folders
-    if spec.copy:
-        for path_str in spec.copy:
+    if _spec_attr(spec, "copy"):
+        for path_str in _spec_attr(spec, "copy"):
             path = Path(path_str)
             if path.is_dir():
                 image = image.with_source_folder(path)
