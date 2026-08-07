@@ -1329,7 +1329,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "flyte" },
+    { name = "flyte", specifier = ">=2.5.18" },
     { name = "flyteidl2" },
     { name = "flytekit" },
 ]

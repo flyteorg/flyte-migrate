@@ -80,6 +80,28 @@ if __name__ == "__main__":
     print(run.url)
 ```
 
+### Or use the CLI
+
+Installing `flyte-migrate` also gives you `pyflyte-migrate`, which mirrors the `pyflyte` UX
+against a v2 cluster. Files driven by the CLI don't need the `import flyte_migrate` line —
+the shim is applied automatically before your file is loaded.
+
+```bash
+# Run locally (pyflyte semantics: local by default)
+pyflyte-migrate run wf.py my_workflow --data=hello
+
+# Run on the v2 cluster
+pyflyte-migrate run --remote -p my-project -d development wf.py my_workflow --data=hello
+
+# Register (deploy) workflows from files or directories
+pyflyte-migrate register -p my-project -d development workflows/
+```
+
+Cluster connection uses the standard v2 config discovery (`./config.yaml`, `.flyte/config.yaml`,
+`~/.flyte/config.yaml`, ...), overridable with `-c /path/to/config.yaml` or a `FLYTE_API_KEY`
+environment variable. Each registered file gets its own per-module environment, so files that
+define same-named workflows don't collide.
+
 ## What Gets Translated
 
 `flyte-migrate` intercepts v1 API calls at import time and translates them to v2 equivalents. Here's what's covered:
