@@ -6,6 +6,13 @@ call.  Heavy lifting (cache policy, resource merging, environment construction) 
 delegated to focused helper functions so the top-level decorator stays readable.
 """
 
+# Annotations below name flytekit.Cache, which only exists in newer flytekit. The shim is
+# pip-installed into the user's own v1 image, whose flytekit we do not control, so keep
+# annotations lazy — nothing here introspects them at runtime, and an eager
+# ``Union[bool, flytekit.Cache]`` makes the whole module fail to import on older images
+# with "AttributeError: module 'flytekit' has no attribute 'Cache'".
+from __future__ import annotations
+
 import datetime
 from typing import Callable, Dict, List, Literal, Optional, ParamSpec, TypeVar, Union, cast
 
