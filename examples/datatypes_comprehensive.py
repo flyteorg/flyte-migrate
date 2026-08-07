@@ -5,7 +5,6 @@ through the flyte-migrate shim:
 - Basic types: int, float, str, bool
 - Generic collections: List[int], Dict[str, float]
 - Optional types
-- NamedTuple as task output
 - @dataclass as task input/output
 - Enum types
 - datetime.datetime, datetime.timedelta
@@ -20,7 +19,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Annotated, Dict, List, NamedTuple, Optional, Tuple
+from typing import Annotated, Dict, List, Optional, Tuple
 
 from flytekit import ImageSpec, task, workflow
 from flytekit.types.file import FlyteFile
@@ -29,11 +28,17 @@ image = ImageSpec(packages=["pandas"])
 
 
 # ---------------------------------------------------------------------------
-# NamedTuple for structured output
+# Dataclass for structured task output
+#
+# NOTE: v1 allows a NamedTuple here, but v2 flattens it into separate output
+# variables and hands the caller a plain tuple, so `stats.total` in the workflow
+# below raises "'tuple' object has no attribute 'total'". A dataclass survives
+# the round trip with attribute access intact.
 # ---------------------------------------------------------------------------
 
 
-class StatsResult(NamedTuple):
+@dataclass
+class StatsResult:
     mean: float
     total: int
     label: str
@@ -77,7 +82,7 @@ class Priority(Enum):
 
 @task(container_image=image)
 def compute_stats(values: List[int], label: str) -> StatsResult:
-    """Task returning a NamedTuple."""
+    """Task returning a structured dataclass output."""
     total = sum(values)
     mean = total / len(values) if values else 0.0
     return StatsResult(mean=mean, total=total, label=label)
@@ -184,7 +189,7 @@ def datatypes_wf(
     # Basic types
     basics = basic_types_task(i=age, f=score, s=name, b=True)
 
-    # NamedTuple output
+    # Structured dataclass output
     stats = compute_stats(values=values, label=name)
 
     # Dataclass I/O

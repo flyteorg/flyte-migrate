@@ -10,7 +10,7 @@ import pytest
 from click.testing import CliRunner
 
 from flyte_migrate._task import task_shim
-from flyte_migrate._workflow import parent_env
+from flyte_migrate._workflow import _parent_envs
 from flyte_migrate.cli import main
 
 # Deliberately has no `import flyte_migrate` line — proves the CLI applies the shim itself.
@@ -36,6 +36,8 @@ def runner(monkeypatch, tmp_path):
     # teardown hangs; that would kill pytest, so make it a no-op.
     monkeypatch.setattr(os, "_exit", lambda code: None)
     monkeypatch.delenv("FLYTE_API_KEY", raising=False)
+    # Parent envs accumulate per loaded module process-wide; isolate register assertions.
+    _parent_envs.clear()
     # Run files must live under cwd; ./config.yaml is first in the config search order.
     monkeypatch.chdir(tmp_path)
     (tmp_path / "config.yaml").write_text("admin:\n  endpoint: dns:///fake.example.com\n  insecure: true\n")
@@ -174,19 +176,20 @@ def test_register_dry_run(runner, monkeypatch, tmp_path):
     filename = _write_wf(tmp_path, "regwf")
     captured = {}
 
-    def fake_deploy(env, **kwargs):
-        captured["env"] = env
+    def fake_deploy(*envs, **kwargs):
+        captured["envs"] = envs
         captured.update(kwargs)
         return [SimpleNamespace(env_repr=list, table_repr=list)]
 
     monkeypatch.setattr(flyte, "deploy", fake_deploy)
     result = runner.invoke(main, ["register", "--dry-run", "--version", "v1", filename])
     assert result.exit_code == 0, result.output
-    assert captured["env"] is parent_env
     assert captured["dryrun"] is True
     assert captured["version"] == "v1"
-    # Loading the file registered its task env into the shim's parent environment.
-    assert any("regwf_double" in env.name for env in parent_env.depends_on)
+    # Loading the file created a per-module parent env holding the task env.
+    parent = _parent_envs["regwf_workflow"]
+    assert parent in captured["envs"]
+    assert any("regwf_double" in env.name for env in parent.depends_on)
 
 
 def test_register_directory(runner, monkeypatch, tmp_path):
@@ -195,18 +198,19 @@ def test_register_directory(runner, monkeypatch, tmp_path):
     _write_wf(subdir, "rega")
     _write_wf(subdir, "regb")
     deploy_calls = []
-    monkeypatch.setattr(
-        flyte,
-        "deploy",
-        lambda env, **kw: deploy_calls.append(env) or [SimpleNamespace(env_repr=list, table_repr=list)],
-    )
+
+    def fake_deploy(*envs, **kwargs):
+        deploy_calls.append(envs)
+        return [SimpleNamespace(env_repr=list, table_repr=list)]
+
+    monkeypatch.setattr(flyte, "deploy", fake_deploy)
     result = runner.invoke(main, ["register", "--dry-run", "wfs"])
     assert result.exit_code == 0, result.output
-    # One deploy call covers all loaded files via the shared parent env.
-    assert deploy_calls == [parent_env]
-    names = [env.name for env in parent_env.depends_on]
-    assert any("rega_double" in n for n in names)
-    assert any("regb_double" in n for n in names)
+    # One deploy call covers both files, each with its own per-module parent env.
+    assert len(deploy_calls) == 1
+    deployed_names = [env.name for env in deploy_calls[0]]
+    assert "rega_workflow" in deployed_names
+    assert "regb_workflow" in deployed_names
 
 
 def test_register_v1_flags(runner, monkeypatch, tmp_path):
@@ -215,7 +219,7 @@ def test_register_v1_flags(runner, monkeypatch, tmp_path):
     broken.write_text("raise RuntimeError('boom')\n")
     captured = {}
 
-    def fake_deploy(env, **kwargs):
+    def fake_deploy(*envs, **kwargs):
         captured.update(kwargs)
         return [SimpleNamespace(env_repr=list, table_repr=list)]
 

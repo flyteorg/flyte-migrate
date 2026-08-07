@@ -1,8 +1,8 @@
 name: Publish to PyPI
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]  # cutting a release in the UI fires this, not `push: tags`
   workflow_dispatch:
 
 jobs:
@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      contents: read   # declaring permissions drops the defaults; checkout needs this
       id-token: write  # trusted publishing, no API token needed
     steps:
       - uses: actions/checkout@v4

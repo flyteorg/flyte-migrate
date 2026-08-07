@@ -99,8 +99,8 @@ pyflyte-migrate register -p my-project -d development workflows/
 
 Cluster connection uses the standard v2 config discovery (`./config.yaml`, `.flyte/config.yaml`,
 `~/.flyte/config.yaml`, ...), overridable with `-c /path/to/config.yaml` or a `FLYTE_API_KEY`
-environment variable. Note: `register` loads all files into one shared environment, so function
-names must be unique across the registered files.
+environment variable. Each registered file gets its own per-module environment, so files that
+define same-named workflows don't collide.
 
 ## What Gets Translated
 

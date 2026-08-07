@@ -33,7 +33,7 @@ from flyte.cli import _common as common
 from flyte.cli._run import RunArguments, RunTaskCommand, TaskFiles, TaskPerFileGroup
 
 import flyte_migrate  # noqa: F401  (patches flytekit before any user file is loaded)
-from flyte_migrate._workflow import parent_env
+from flyte_migrate._workflow import _parent_envs
 
 try:
     _VERSION = importlib.metadata.version("flyte-migrate")
@@ -67,6 +67,22 @@ RAW_DATA_OPTION = click.Option(
     help="Prefix used to store offloaded data (FlyteFile, FlyteDirectory, dataframes). e.g. s3://bucket/",
 )
 
+# Replacements for v2's native --env / --label options, carrying the v1 alias spellings.
+# Same dataclass field names ("env", "label"), so RunArguments parses them natively.
+ENV_OPTION = click.Option(
+    ["--envvars", "--env", "-e", "env"],
+    type=str,
+    multiple=True,
+    help="Environment variables to set in the container, of the format ENV_NAME=ENV_VALUE.",
+)
+
+LABEL_OPTION = click.Option(
+    ["--labels", "--label", "label"],
+    type=str,
+    multiple=True,
+    help="Labels to attach to the execution, of the format label_key=label_value.",
+)
+
 # v1 pyflyte run flags that map onto v2 with_runcontext parameters.
 _RUN_V1_OPTIONS = [
     click.Option(["--wait", "--wait-execution", "wait"], is_flag=True, default=False, help="Alias for --follow."),
@@ -77,20 +93,6 @@ _RUN_V1_OPTIONS = [
         help="v1-style alias for --copy-style ('auto' maps to loaded_modules).",
     ),
     click.Option(["--copy-all", "copy_all"], is_flag=True, default=False, help="[Deprecated] Same as --copy all."),
-    click.Option(
-        ["--envvars", "--env", "envvars"],
-        type=str,
-        multiple=True,
-        callback=common.key_value_callback,
-        help="Environment variables to set in the container, of the format ENV_NAME=ENV_VALUE.",
-    ),
-    click.Option(
-        ["--labels", "--label", "labels"],
-        type=str,
-        multiple=True,
-        callback=common.key_value_callback,
-        help="Labels to attach to the execution, of the format label_key=label_value.",
-    ),
     click.Option(
         ["--annotations", "--annotation", "annotations"],
         type=str,
@@ -174,10 +176,20 @@ class MigrateTaskFiles(TaskFiles):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Swap v2's --local for pyflyte's --remote, and replace --image / --raw-data-path
-        # with versions carrying the v1 short flag and aliases.
-        self.params = [p for p in self.params if p.name not in ("local", "image", "raw_data_path")]
-        self.params.extend([REMOTE_OPTION, IMAGE_OPTION, RAW_DATA_OPTION, *_RUN_V1_OPTIONS, *_RUN_IGNORED_OPTIONS])
+        # Swap v2's --local for pyflyte's --remote, and replace --image / --raw-data-path /
+        # --env / --label with versions carrying the v1 short flags and aliases.
+        self.params = [p for p in self.params if p.name not in ("local", "image", "raw_data_path", "env", "label")]
+        self.params.extend(
+            [
+                REMOTE_OPTION,
+                IMAGE_OPTION,
+                RAW_DATA_OPTION,
+                ENV_OPTION,
+                LABEL_OPTION,
+                *_RUN_V1_OPTIONS,
+                *_RUN_IGNORED_OPTIONS,
+            ]
+        )
 
     def list_commands(self, ctx):
         # Only *.py files and directories — drop v2's deployed-task/python-script pseudo-commands.
@@ -194,15 +206,12 @@ class MigrateTaskFiles(TaskFiles):
             copy = "all"
         if copy:
             p["copy_style"] = _COPY_TO_V2[copy]
+        # --env/--label flow through RunArguments natively; the rest have no RunArguments
+        # field and are forwarded to with_runcontext by MigrateRunTaskCommand.
         run_kwargs = {}
-        for param_name, runcontext_name in (
-            ("envvars", "env_vars"),
-            ("labels", "labels"),
-            ("annotations", "annotations"),
-        ):
-            value = p.pop(param_name, None)
-            if value:
-                run_kwargs[runcontext_name] = value
+        annotations = p.pop("annotations", None)
+        if annotations:
+            run_kwargs["annotations"] = annotations
         if p.pop("overwrite_cache", False):
             run_kwargs["overwrite_cache"] = True
         interruptible = p.pop("interruptible", None)
@@ -361,11 +370,7 @@ def register(
     paths: Tuple[Path, ...],
     **ignored,
 ):
-    """Register (deploy) v1 flytekit workflows from files or directories on the v2 cluster.
-
-    All loaded workflows/tasks share one environment, so function names must be
-    unique across the registered files.
-    """
+    """Register (deploy) v1 flytekit workflows from files or directories on the v2 cluster."""
     for key, value in ignored.items():
         if value:
             click.echo(f"Warning: --{key.replace('_', '-')} has no v2 equivalent and is ignored", err=True)
@@ -384,10 +389,15 @@ def register(
             if not skip_errors:
                 raise
             click.echo(f"Warning: skipping {f}: {e}", err=True)
+    # Loading the files populated one parent env per defining module; deploy them all.
+    envs = list(_parent_envs.values())
+    if not envs:
+        raise click.ClickException("No workflows or tasks found in the given files")
     with common.cli_status(obj.output_format, "Deploying..."):
-        deployment = flyte.deploy(parent_env, dryrun=dry_run, copy_style=copy_style, version=version)
-    common.print_output(common.format("Environments", deployment[0].env_repr(), obj.output_format), obj.output_format)
-    common.print_output(common.format("Entities", deployment[0].table_repr(), obj.output_format), obj.output_format)
+        deployments = flyte.deploy(*envs, dryrun=dry_run, copy_style=copy_style, version=version)
+    for deployment in deployments:
+        common.print_output(common.format("Environments", deployment.env_repr(), obj.output_format), obj.output_format)
+        common.print_output(common.format("Entities", deployment.table_repr(), obj.output_format), obj.output_format)
 
 
 register.params.extend(_REGISTER_IGNORED_OPTIONS)

@@ -1,0 +1,40 @@
+name: Integration Tests
+
+# Runs every example in examples/ against a real Flyte v2 cluster, plugins included.
+# To skip the plugin examples locally: -m "integration and not plugins"
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7 * * *"
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  examples:
+    name: Run examples on cluster
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --dev
+
+      - name: Run examples
+        env:
+          FLYTE_API_KEY: ${{ secrets.FLYTE_API_KEY }}
+          FLYTE_PROJECT: flyte-migrate
+          FLYTE_DOMAIN: development
+        run: uv run pytest -n 10 tests/integration -v -s -m integration

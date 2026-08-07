@@ -56,7 +56,7 @@ def ray_task() -> typing.List[int]:
                 replicas=2,
                 min_replicas=1,
                 max_replicas=4,
-                ray_start_params={"num-gpus": "1"},
+                ray_start_params={"num-gpus": "0"},
             ),
         ],
         enable_autoscaling=True,

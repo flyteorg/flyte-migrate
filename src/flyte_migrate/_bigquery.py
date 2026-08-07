@@ -9,6 +9,7 @@ automatically.
 
 from __future__ import annotations
 
+import inspect
 import sys
 import types
 import weakref
@@ -19,7 +20,7 @@ from flyte._task import TaskTemplate
 from flyte.models import NativeInterface, SerializationContext
 from flyteidl2.core import tasks_pb2
 
-from flyte_migrate._workflow import parent_env
+from flyte_migrate._workflow import parent_env_for
 
 
 @dataclass
@@ -89,6 +90,11 @@ def _create_bigquery_task_template(
         native_outputs["results"] = output_structured_dataset_type
 
     interface = NativeInterface(inputs=native_inputs, outputs=native_outputs)
+
+    # BigQueryTask is constructed at module scope in user code, so the defining module is
+    # the caller's — there is no decorated function to read __module__ off.
+    caller = inspect.currentframe().f_back  # type: ignore[union-attr]
+    parent_env = parent_env_for(caller.f_globals.get("__name__") if caller else None)
 
     tmpl = BigQueryTaskTemplate(
         name=parent_env.name + "." + name,

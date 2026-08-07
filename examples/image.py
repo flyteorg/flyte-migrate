@@ -10,10 +10,10 @@ image_spec = _transform_image_spec_v1_to_v2(
     ImageSpec(
         packages=["pandas"],
         env={"API_URL": "https://api.example.com"},
-        pip_index="https://internal-pypi.mycompany.com/simple",
+        pip_index="https://pypi.org/simple",
         pip_extra_index_url=["https://pypi.org/simple"],
         commands=["mkdir -p /workspace/models"],
-        copy=["config.yaml"],
+        copy=["pyproject.toml"],
         builder="envd",
         base_image=ImageSpec(packages=["numpy"]),
         # source_root="/your/source/root",

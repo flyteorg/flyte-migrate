@@ -5,8 +5,8 @@ description = "migrate v1 workflows to v2"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    # cli.py imports private flyte.cli internals; bound the version to catch breakage deliberately
-    "flyte>=2.0.10a0,<2.1",
+    # cli.py imports private flyte.cli internals; the CLI unit tests smoke-test compatibility in CI
+    "flyte>=2.5.18",
     "flytekit",
     "flyteidl2",
 ]
@@ -25,9 +25,11 @@ dev = [
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
     "pytest-benchmark>=5.1.0",
+    "pytest-xdist>=3.6.1",
     "ruff>=0.11.0",
     "setuptools-scm>=8.2.0",
     "flytekitplugins-bigquery",
+    "flytekitplugins-deck-standard",
     "flytekitplugins-spark",
     "flyteplugins-spark",
     "flytekitplugins-dask",
@@ -62,7 +64,11 @@ root = "."
 norecursedirs = []
 log_cli = true
 log_cli_level = 20
-markers = []
+markers = [
+    "integration: runs examples against a real cluster; opt in with -m integration",
+    "plugins: integration examples needing cluster operators or external services",
+]
+addopts = "-m 'not integration'"
 asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
