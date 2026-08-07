@@ -36,4 +36,28 @@ parent_env = TaskEnvironment(
     image=Image.from_debian_base().with_pip_packages("setuptools", "flytekit", _flyte_migrate_requirement()),
 )
 
-flytekit.workflow = parent_env.task
+
+def _workflow_shim(*args, **kwargs):
+    """``parent_env.task`` that stamps the shim-aware resolver onto the template.
+
+    Remote pods must apply the shim before importing the user module (which may lack
+    the ``import flyte_migrate`` line when driven by the CLI or upgrade flow).
+    """
+    from flyte._task import TaskTemplate
+
+    from flyte_migrate._resolver import ShimTaskResolver
+
+    out = parent_env.task(*args, **kwargs)
+    if isinstance(out, TaskTemplate):  # bare @workflow form
+        out.task_resolver = ShimTaskResolver()
+        return out
+
+    def decorator(fn):  # parameterised @workflow(...) form
+        template = out(fn)
+        template.task_resolver = ShimTaskResolver()
+        return template
+
+    return decorator
+
+
+flytekit.workflow = _workflow_shim

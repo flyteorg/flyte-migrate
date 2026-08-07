@@ -393,4 +393,54 @@ def register(
 register.params.extend(_REGISTER_IGNORED_OPTIONS)
 
 
+def _a0_arg_value(args: Tuple[str, ...], name: str) -> str | None:
+    """Value of a ``--name value`` pair in an a0-style argv, or None."""
+    for i, arg in enumerate(args[:-1]):
+        if arg == name:
+            return args[i + 1]
+    return None
+
+
+@main.command("upgrade-exec", hidden=True, context_settings={"ignore_unknown_options": True})
+@click.argument("a0_args", nargs=-1, type=click.UNPROCESSED)
+def upgrade_exec(a0_args: Tuple[str, ...]):
+    """Pod entrypoint for the v1→v2 upgrade flow — not for direct use.
+
+    Receives the standard v2 runtime (``a0``) argv. Downloads the code bundle if
+    one is given (so the user module is importable *now*, before ``a0`` runs),
+    imports it under the shim so all child TaskEnvironments register on
+    ``parent_env``, builds their images, then execs ``a0`` with the resulting
+    ``--image-cache`` appended. ``a0`` keeps the ``--tgz`` flag so child actions
+    inherit the code bundle.
+    """
+    import importlib as _importlib
+    import os
+
+    from flyte._deploy import build_images
+    from flyte._initialize import init_in_cluster
+    from flyte.models import CodeBundle
+
+    module_name = _a0_arg_value(a0_args, "mod")  # trailing resolver args: ... mod <module> instance <name>
+    if not module_name:
+        raise click.ClickException("upgrade-exec requires --resolver ... mod <module> in the a0 argv")
+
+    init_in_cluster()
+
+    tgz = _a0_arg_value(a0_args, "--tgz")
+    dest = _a0_arg_value(a0_args, "--dest") or "."
+    if tgz:
+        import asyncio
+
+        from flyte._internal.runtime.entrypoints import download_code_bundle
+
+        version = _a0_arg_value(a0_args, "--version") or ""
+        asyncio.run(download_code_bundle(CodeBundle(tgz=tgz, destination=dest, computed_version=version)))
+
+    sys.path.insert(0, dest)
+    _importlib.import_module(module_name)  # shim already active: cli.py imports flyte_migrate at the top
+
+    image_cache = build_images(parent_env)
+    os.execvp("a0", ["a0", *a0_args, "--image-cache", image_cache.to_transport])
+
+
 main.add_command(run)

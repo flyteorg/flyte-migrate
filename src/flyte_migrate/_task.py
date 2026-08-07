@@ -17,6 +17,7 @@ from flytekit.extras.accelerators import BaseAccelerator
 from flyte_migrate._image import _transform_image_spec_v1_to_v2
 from flyte_migrate._plugins import _transform_plugin_config_v1_to_v2
 from flyte_migrate._pod_template import _transform_pod_template_v1_to_v2
+from flyte_migrate._resolver import ShimTaskResolver
 from flyte_migrate._resource import _transform_resource_v1_to_v2
 from flyte_migrate._secret import _transform_secret_v1_to_v2
 from flyte_migrate._workflow import parent_env
@@ -144,12 +145,16 @@ def task_shim(
             pod_template_name=pod_template_name,
         )
         _register_task_environment(env, container_image)
-        return env.task(
+        template = env.task(
             retries=retries,
             report=bool(enable_deck),
             timeout=timeout,
             interruptible=interruptible,
         )(_task_function)
+        # Remote pods must apply the shim before importing the user module (which may
+        # lack the `import flyte_migrate` line when driven by the CLI or upgrade flow).
+        template.task_resolver = ShimTaskResolver()
+        return template
 
     if _task_function is None:
         return v2_decorator
