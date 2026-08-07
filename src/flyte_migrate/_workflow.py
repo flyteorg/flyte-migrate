@@ -47,7 +47,10 @@ def _with_flyte_migrate(image: Image) -> Image:
     spec = _flyte_migrate_requirement()
     path = Path(spec)
     if spec.endswith(".whl") and path.exists():
-        return image.with_source_file(path, ".").with_commands([f"pip install ./{path.name}"])
+        from flyte._image import PythonWheels
+
+        # PythonWheels installs into the image venv (plain RUN pip would hit system python).
+        return image.clone(addl_layer=PythonWheels(wheel_dir=path.parent, package_name="flyte-migrate"))
     return image.with_pip_packages(spec)
 
 
