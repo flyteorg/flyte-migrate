@@ -358,6 +358,36 @@ class TestExtractAttributes:
         assert "pandas" in content
         assert "numpy" in content
 
+    def test_merged_requirements_are_not_written_into_the_cwd(self, tmp_path, monkeypatch):
+        """This runs on `import flyte_migrate`; a relative path litters the user's project."""
+        monkeypatch.chdir(tmp_path)
+        reqs = []
+        for name, pkg in (("parent", "pandas"), ("child", "numpy")):
+            f = tmp_path / f"{name}_req.txt"
+            f.write_text(f"{pkg}\n")
+            reqs.append(f)
+        before = set(tmp_path.iterdir())
+
+        parent = flytekit.ImageSpec(requirements=str(reqs[0]))
+        _extract_attributes(parent, flytekit.ImageSpec(requirements=str(reqs[1])))
+
+        assert set(tmp_path.iterdir()) == before, "merge wrote into the current directory"
+        assert Path(parent.requirements).is_absolute()
+
+    def test_merged_requirements_do_not_collide(self, tmp_path):
+        """A constant filename means concurrent merges overwrite each other."""
+        a, b = tmp_path / "a.txt", tmp_path / "b.txt"
+        a.write_text("pandas\n")
+        b.write_text("numpy\n")
+
+        merged = []
+        for _ in range(2):
+            parent = flytekit.ImageSpec(requirements=str(a))
+            _extract_attributes(parent, flytekit.ImageSpec(requirements=str(b)))
+            merged.append(parent.requirements)
+
+        assert merged[0] != merged[1]
+
 
 # ---------------------------------------------------------------------------
 # conda warnings

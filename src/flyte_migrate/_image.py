@@ -8,6 +8,7 @@ The v1-to-v2 plugin package name mapping is defined in :data:`_PACKAGE_V1_TO_V2`
 """
 
 import re
+import tempfile
 from functools import cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, cast
@@ -147,16 +148,19 @@ def _extract_attributes(parent: flytekit.ImageSpec, child: flytekit.ImageSpec) -
         if not parent.requirements:
             parent.requirements = child.requirements
         else:
-            merged_file = "merged_requirements.txt"
+            # A temp file, not a fixed name in the cwd: this runs on `import flyte_migrate`,
+            # so a relative path drops a stray file in whatever directory the user happens to
+            # be in, and the constant name means concurrent merges overwrite each other.
+            # v2 only reads and hashes the path, so it does not need to live under root_dir.
             with (
                 open(parent.requirements, "r") as f1,
                 open(child.requirements, "r") as f2,
-                open(merged_file, "w") as out,
+                tempfile.NamedTemporaryFile("w", suffix="-requirements.txt", delete=False) as out,
             ):
                 out.write(f1.read())
                 out.write("\n")
                 out.write(f2.read())
-            parent.requirements = merged_file
+            parent.requirements = out.name
     if child.copy:
         if not parent.copy:
             parent.copy = []
