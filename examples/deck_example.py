@@ -15,6 +15,7 @@ custom_image = flytekit.ImageSpec(
         "pandas",
         "ydata_profiling",
         "setuptools",
+        "mypy",
     ]
 )
 
