@@ -322,6 +322,22 @@ def test_flyte_migrate_requirement(monkeypatch):
     assert _flyte_migrate_requirement() == "flyte-migrate"
 
 
+def test_shim_requirements_floor_flyte(monkeypatch):
+    import flyte._version
+
+    from flyte_migrate._workflow import _shim_requirements
+
+    monkeypatch.setattr(importlib.metadata, "version", lambda name: "1.2.3")
+
+    # A released flyte gets a floor so flyte-migrate's own metadata can't downgrade it.
+    monkeypatch.setattr(flyte._version, "__version__", "2.5.18")
+    assert _shim_requirements() == ("flyte-migrate==1.2.3", "flyte>=2.5.18")
+
+    # Dev builds of flyte have no matching PyPI release.
+    monkeypatch.setattr(flyte._version, "__version__", "2.6.0.dev1+gabc")
+    assert _shim_requirements() == ("flyte-migrate==1.2.3",)
+
+
 def test_images_include_flyte_migrate():
     from flyte_migrate._image import _transform_image_spec_v1_to_v2
 
