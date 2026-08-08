@@ -16,6 +16,8 @@ dependencies of their own module's parent via ``depends_on``.
 
 import importlib.metadata
 import re
+import sys
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import flytekit
@@ -54,8 +56,42 @@ def _shim_requirements() -> Tuple[str, ...]:
 _parent_envs: Dict[str, TaskEnvironment] = {}
 
 
+def _main_module_name() -> Optional[str]:
+    """The name flyte will re-import the ``__main__`` script under, inside the container.
+
+    ``flyte._module.extract_obj_module`` names a task's module by its path relative to the
+    run's root dir, and ``flyte._initialize`` defaults that root dir to ``Path.cwd()``.
+    Mirror both rules, so ``python examples/deck_example.py`` from the repo root yields
+    ``examples.deck_example`` (matching the container's ``mod examples.deck_example``) while
+    ``cd examples && python deck_example.py`` yields ``deck_example``.
+
+    Env names are fixed at import time, before ``flyte.init`` runs, so cwd is the best
+    available stand-in for the root dir — an explicitly-passed ``root_dir`` is not visible
+    here.
+    """
+    main_file = getattr(sys.modules.get("__main__"), "__file__", None)
+    if not main_file:
+        return None
+    path = Path(main_file).resolve()
+    try:
+        relative = path.relative_to(Path.cwd().resolve())
+    except ValueError:
+        # Outside the root dir; flyte falls back to the bare stem here too.
+        return path.stem
+    return ".".join(relative.with_suffix("").parts)
+
+
 def module_slug(module: Optional[str]) -> str:
-    """Turn a dotted module path into something usable in a v2 environment name."""
+    """Turn a dotted module path into something usable in a v2 environment name.
+
+    ``__main__`` is resolved to the name the container will import first. Running a file
+    directly (``python examples/deck_example.py``) names environments at launch time off
+    ``__main__``, but the remote resolver re-imports that file under its own name, so the
+    container would look up ``deck_example_*`` in an image cache keyed ``main_*`` and fail
+    with ``Environment '...' not found in image cache``.
+    """
+    if module == "__main__":
+        module = _main_module_name()
     return re.sub(r"[^0-9a-zA-Z]+", "_", module or "main").strip("_")
 
 
