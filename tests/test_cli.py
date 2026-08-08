@@ -209,8 +209,9 @@ def test_register_directory(runner, monkeypatch, tmp_path):
     # One deploy call covers both files, each with its own per-module parent env.
     assert len(deploy_calls) == 1
     deployed_names = [env.name for env in deploy_calls[0]]
-    assert "rega_workflow" in deployed_names
-    assert "regb_workflow" in deployed_names
+    # Files in wfs/ are imported as wfs.rega / wfs.regb, matching the container's view.
+    assert "wfs_rega_workflow" in deployed_names
+    assert "wfs_regb_workflow" in deployed_names
 
 
 def test_register_v1_flags(runner, monkeypatch, tmp_path):
@@ -245,6 +246,32 @@ def test_register_v1_flags(runner, monkeypatch, tmp_path):
     combined = result.output + (result.stderr or "")
     assert "skipping" in combined  # broken.py skipped, not fatal
     assert "--service-account" in combined  # warned as ignored
+
+
+def test_run_imports_file_as_dotted_module(runner, monkeypatch, tmp_path):
+    # The env name must be derived from the dotted module path relative to the run's
+    # root dir — the same name the remote container derives — or remote submission
+    # fails with "Environment ... not found in image cache".
+    subdir = tmp_path / "pkgdir"
+    subdir.mkdir()
+    _write_wf(subdir, "modwf")
+    calls = []
+    monkeypatch.setattr(flyte, "with_runcontext", _fake_runcontext(calls))
+    result = runner.invoke(main, ["run", "pkgdir/modwf.py", "modwf_wf", "--x", "1"])
+    assert result.exit_code == 0, result.output
+    assert "pkgdir_modwf_workflow" in _parent_envs
+    assert "modwf_workflow" not in _parent_envs
+
+
+def test_register_imports_file_as_dotted_module(runner, monkeypatch, tmp_path):
+    subdir = tmp_path / "wfdir"
+    subdir.mkdir()
+    _write_wf(subdir, "dotreg")
+    monkeypatch.setattr(flyte, "deploy", lambda *envs, **kw: [SimpleNamespace(env_repr=list, table_repr=list)])
+    result = runner.invoke(main, ["register", "--dry-run", "wfdir/dotreg.py"])
+    assert result.exit_code == 0, result.output
+    assert "wfdir_dotreg_workflow" in _parent_envs
+    assert "dotreg_workflow" not in _parent_envs
 
 
 def test_register_no_python_files(runner, tmp_path):
@@ -293,6 +320,22 @@ def test_flyte_migrate_requirement(monkeypatch):
 
     monkeypatch.setattr(importlib.metadata, "version", missing)
     assert _flyte_migrate_requirement() == "flyte-migrate"
+
+
+def test_shim_requirements_floor_flyte(monkeypatch):
+    import flyte._version
+
+    from flyte_migrate._workflow import _shim_requirements
+
+    monkeypatch.setattr(importlib.metadata, "version", lambda name: "1.2.3")
+
+    # A released flyte gets a floor so flyte-migrate's own metadata can't downgrade it.
+    monkeypatch.setattr(flyte._version, "__version__", "2.5.18")
+    assert _shim_requirements() == ("flyte-migrate==1.2.3", "flyte>=2.5.18")
+
+    # Dev builds of flyte have no matching PyPI release.
+    monkeypatch.setattr(flyte._version, "__version__", "2.6.0.dev1+gabc")
+    assert _shim_requirements() == ("flyte-migrate==1.2.3",)
 
 
 def test_images_include_flyte_migrate():
