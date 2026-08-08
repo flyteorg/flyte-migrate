@@ -16,7 +16,7 @@ dependencies of their own module's parent via ``depends_on``.
 
 import importlib.metadata
 import re
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import flytekit
 from flyte import Image, Resources, TaskEnvironment
@@ -36,6 +36,21 @@ def _flyte_migrate_requirement() -> str:
     return f"flyte-migrate=={version}" if re.fullmatch(r"[\d.]+", version) else "flyte-migrate"
 
 
+def _shim_requirements() -> Tuple[str, ...]:
+    """``flyte-migrate`` plus a floor on ``flyte`` itself.
+
+    Without the floor, a released ``flyte-migrate`` whose metadata caps ``flyte``
+    (e.g. ``flyte<2.1``) makes the resolver *downgrade* the flyte already in the
+    base image — 2.5.18 → 2.0.12 — and the shim then imports against the wrong
+    runtime. Dev builds of flyte have no matching PyPI release, so skip the floor.
+    """
+    from flyte._version import __version__
+
+    if "dev" in __version__:
+        return (_flyte_migrate_requirement(),)
+    return (_flyte_migrate_requirement(), f"flyte>={__version__}")
+
+
 _parent_envs: Dict[str, TaskEnvironment] = {}
 
 
@@ -52,7 +67,7 @@ def parent_env_for(module: Optional[str]) -> TaskEnvironment:
         env = TaskEnvironment(
             name=name,
             resources=Resources(cpu=0.8, memory="800Mi"),
-            image=Image.from_debian_base().with_pip_packages("setuptools", "flytekit", _flyte_migrate_requirement()),
+            image=Image.from_debian_base().with_pip_packages("setuptools", "flytekit", *_shim_requirements()),
         )
         _parent_envs[name] = env
     return env
