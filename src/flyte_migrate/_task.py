@@ -48,13 +48,26 @@ T = TypeVar("T")  # task config
 # ---------------------------------------------------------------------------
 
 
-def _translate_cache_policy(cache: Union[bool, flytekit.Cache]) -> Literal["auto", "disable"]:
-    """Convert a v1 cache flag into the v2 cache policy string.
+def _translate_cache_policy(cache: Union[bool, flytekit.Cache]) -> Union[Literal["auto", "disable"], flyte.Cache]:
+    """Convert a v1 cache flag or ``Cache`` object into the v2 cache policy.
 
     In v1, ``cache=True`` enables caching while ``cache=False`` (the default) disables
-    it.  The v2 API expects the strings ``"auto"`` or ``"disable"``.
+    it.  A v1 ``Cache`` object carries version/serialize/ignored_inputs/salt, all of
+    which v2's ``flyte.Cache`` supports directly.  v1 ``policies`` are computed
+    client-side into the version by flytekit, which v2 does not do — log and ignore.
     """
-    return "auto" if cache else "disable"
+    if isinstance(cache, bool):
+        return "auto" if cache else "disable"
+    if getattr(cache, "policies", None):
+        logger.warning("v1 Cache.policies are not supported on v2; using auto/override versioning instead")
+    version = getattr(cache, "version", None)
+    return flyte.Cache(
+        behavior="override" if version else "auto",
+        version_override=version,
+        serialize=getattr(cache, "serialize", False),
+        ignored_inputs=getattr(cache, "ignored_inputs", ()),
+        salt=getattr(cache, "salt", ""),
+    )
 
 
 def _build_task_environment(
@@ -154,7 +167,8 @@ def task_shim(
     parameters do not break existing code.
     """
     if kwargs:
-        logger.debug(f"Unsupported args {kwargs.values()}")
+        # Name the ignored args so migrating users can see exactly what was dropped.
+        logger.warning(f"@task args not supported by flyte-migrate and ignored: {sorted(kwargs)}")
 
     def v2_decorator(_task_function: Optional[Callable[P, R]] = None) -> Callable[P, R]:
         if _task_function is None:
