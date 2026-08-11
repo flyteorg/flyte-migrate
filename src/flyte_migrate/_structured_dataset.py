@@ -11,6 +11,7 @@ Not carried over (v2 limitations of this shim): column-subset projection from
 ``Annotated[StructuredDataset, kwtypes(...)]`` annotations, and custom metadata.
 """
 
+import inspect
 from typing import Any, Optional, Type
 
 from flyte.io import DataFrame
@@ -21,6 +22,28 @@ from flytekit.types.structured import StructuredDataset
 
 def _df_transformer() -> TypeTransformer[DataFrame]:
     return TypeEngine.get_transformer(DataFrame)
+
+
+async def _maybe_await(value: Any) -> Any:
+    """Await syncify-wrapped results only when they actually come back as awaitables."""
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+def _resolve_sync(value: Any) -> Any:
+    """Unwrap a syncify-wrapped call for a synchronous v1 caller.
+
+    syncify-wrapped v2 methods (``DataFrame.all``, ``from_df``, ...) return the value
+    when the calling thread has no event loop, but a coroutine when one is running —
+    which is the case for sync v1 task functions executed via v2's run_sync_with_loop.
+    Same mechanism as ``_SyncLazyEntity`` in :mod:`flyte_migrate._reference`.
+    """
+    if inspect.iscoroutine(value):
+        from flyte.syncify import syncify
+
+        return syncify._bg_loop.call_in_loop_sync(value)
+    return value
 
 
 class _StructuredDatasetShim(StructuredDataset):
@@ -35,10 +58,10 @@ class _StructuredDatasetShim(StructuredDataset):
         return self
 
     def all(self) -> Any:
-        return self._df2.all()
+        return _resolve_sync(self._df2.all())
 
     def iter(self) -> Any:
-        return self._df2.iter()
+        return _resolve_sync(self._df2.iter())
 
 
 class StructuredDatasetTransformer(TypeTransformer[StructuredDataset]):
@@ -60,20 +83,18 @@ class StructuredDatasetTransformer(TypeTransformer[StructuredDataset]):
         python_type: Type[StructuredDataset],
         expected: types_pb2.LiteralType,
     ) -> literals_pb2.Literal:
-        # DataFrame.from_df is syncify-wrapped: called from a running event loop it
-        # dispatches to the background loop and returns the DataFrame directly — no await.
         if isinstance(python_val, DataFrame):
             df2 = python_val
         elif isinstance(python_val, StructuredDataset):
             if python_val.dataframe is not None:
-                df2 = DataFrame.from_df(val=python_val.dataframe, uri=python_val.uri)
+                df2 = await _maybe_await(DataFrame.from_df(val=python_val.dataframe, uri=python_val.uri))
             elif python_val.uri:
                 df2 = DataFrame.from_existing_remote(python_val.uri)
             else:
                 raise TypeTransformerFailedError("StructuredDataset has neither a dataframe nor a uri")
         else:
             # v1 lets a task annotated `-> StructuredDataset` return the raw dataframe.
-            df2 = DataFrame.from_df(val=python_val)
+            df2 = await _maybe_await(DataFrame.from_df(val=python_val))
         return await _df_transformer().to_literal(df2, DataFrame, expected)
 
     async def to_python_value(
