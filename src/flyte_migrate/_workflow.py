@@ -24,6 +24,8 @@ import flytekit
 from flyte import Image, Resources, TaskEnvironment
 from flyte._logging import logger
 
+from flyte_migrate._resolver import MigrateTaskResolver
+
 
 def _flyte_migrate_requirement() -> str:
     """Pip requirement that makes ``import flyte_migrate`` resolve inside remote containers.
@@ -143,7 +145,10 @@ def workflow_shim(
         logger.warning(f"@workflow args not supported by flyte-migrate and ignored: {dropped_names}")
 
     def v2_decorator(fn: Callable) -> Any:
-        return parent_env_for(fn.__module__).task(interruptible=interruptible or None)(fn)
+        tmpl = parent_env_for(fn.__module__).task(interruptible=interruptible or None)(fn)
+        # Same reason as task_shim: the container must apply the shim before importing the user module.
+        tmpl.task_resolver = MigrateTaskResolver()
+        return tmpl
 
     if _workflow_function is None:
         return v2_decorator
