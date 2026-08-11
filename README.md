@@ -247,6 +247,7 @@ The [`examples/`](examples/) directory contains runnable examples for every feat
 | [`secret_example.py`](examples/secret_example.py) | ENV_VAR and FILE secret mounts |
 | [`deck_example.py`](examples/deck_example.py) | HTML reports via Deck |
 | [`image.py`](examples/image.py) | ImageSpec with packages, apt, env, commands |
+| [`v2_image.py`](examples/v2_image.py) | Mixing v1 and v2: a v1 task using a v2 `flyte.Image` |
 | [`pod_template_example.py`](examples/pod_template_example.py) | Pod customization with labels, annotations |
 | [`reference_task_example.py`](examples/reference_task_example.py) | Calling pre-registered remote tasks |
 | [`datatypes_comprehensive.py`](examples/datatypes_comprehensive.py) | NamedTuple, dataclass, Enum, FlyteFile |
@@ -284,7 +285,7 @@ They work. Plugin configs (spark_conf, worker nodes, etc.) are automatically tra
 The translation happens once at import time. At runtime, your tasks execute directly on v2 infrastructure with no overhead.
 
 **Can I mix v1 and v2 code?**
-Yes. You can gradually introduce native v2 code while keeping v1 code working through flyte-migrate.
+Yes. You can gradually introduce native v2 code while keeping v1 code working through flyte-migrate — see [`examples/v2_image.py`](examples/v2_image.py) for a v1 task whose image is built with the v2 `flyte.Image` API.
 
 **What Python versions are supported?**
 Python 3.10+.
