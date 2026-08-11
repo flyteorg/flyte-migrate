@@ -17,7 +17,7 @@ import flyte
 import flytekit
 from flyte._logging import logger
 
-from flyte_migrate._workflow import _flyte_migrate_requirement
+from flyte_migrate._workflow import _shim_requirements
 
 # Mapping of v1 flytekitplugins package names to their v2 flyteplugins equivalents.
 _PACKAGE_V1_TO_V2: Dict[str, str] = {
@@ -357,18 +357,18 @@ def _transform_image_spec_v1_to_v2(container_image: flytekit.ImageSpec | flyte.I
     if isinstance(container_image, flytekit.ImageSpec):
         image = _build_base_image(container_image)
         image = _apply_image_layers(image, container_image)
-        image = image.with_pip_packages(_flyte_migrate_requirement())
+        image = image.with_pip_packages(*_shim_requirements())
     elif isinstance(container_image, str):
         # from_base images are unnamed and non-extendable by default and would reject pip layers.
         image = (
             flyte.Image.from_base(container_image)
             .clone(name="flyte-migrate-image", extendable=True)
-            .with_pip_packages("flyte", _flyte_migrate_requirement())
+            .with_pip_packages("flyte", *_shim_requirements())
         )
     elif isinstance(container_image, flyte.Image):
         image = container_image
     elif container_image is None:
-        image = flyte.Image.from_debian_base().with_pip_packages("flytekit", _flyte_migrate_requirement())
+        image = flyte.Image.from_debian_base().with_pip_packages("flytekit", *_shim_requirements())
     else:
         raise ValueError(f"Unsupported container_image type: {type(container_image)}")
     return image

@@ -19,11 +19,12 @@ version.
 """
 
 import functools
+import importlib
 import importlib.metadata
-import importlib.util
 import logging
 import sys
 from pathlib import Path
+from types import ModuleType
 from typing import List, Tuple, get_args
 
 import flyte
@@ -161,6 +162,18 @@ class MigrateTaskPerFileGroup(TaskPerFileGroup):
         super().__init__(*args, **kwargs)
         self.run_kwargs = run_kwargs or {}
 
+    @property
+    def objs(self):
+        # The parent property imports by bare file stem, which breaks the shim's
+        # module-derived env names on remote runs — import by dotted path instead.
+        if self._objs is None:
+            root = Path(self.run_args.root_dir) if self.run_args.root_dir else None
+            module = _import_file(self.filename, root)
+            self._objs = self._filter_objects(module)
+            if not self._objs:
+                raise click.ClickException(f"No tasks or workflows found in {self.filename}")
+        return self._objs
+
     def _get_command_for_obj(self, ctx: click.Context, obj_name: str, obj) -> click.Command:
         return MigrateRunTaskCommand(
             obj_name=obj_name,
@@ -257,15 +270,32 @@ pyflyte-migrate run --remote -p my-project -d development wf.py my_wf --name=fly
 )
 
 
-def _load_file(path: Path) -> None:
-    """Import a python file so the shim registers its workflows/tasks into ``parent_env``."""
-    spec = importlib.util.spec_from_file_location(path.stem, path)
-    if spec is None or spec.loader is None:
-        raise click.ClickException(f"Could not load module from {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[path.stem] = module
-    sys.path.append(str(path.parent.absolute()))
-    spec.loader.exec_module(module)
+def _import_file(path: Path, root: Path | None = None) -> ModuleType:
+    """Import a python file by its dotted module path relative to *root* (default cwd).
+
+    The shim names environments after the defining module, and the remote container
+    imports the file by its dotted path relative to the run's root dir. Importing by
+    bare file stem here would give client-side env names (``hello_say_hello_env``)
+    that never match the container's (``examples_hello_say_hello_env``), failing
+    remote submission with "Environment ... not found in image cache".
+    """
+    root = (root or Path.cwd()).resolve()
+    try:
+        rel = path.resolve().relative_to(root)
+        module_name = ".".join(rel.with_suffix("").parts)
+    except ValueError:
+        # Outside the root dir the container's module path can't be reproduced; the
+        # bare stem is the best available (matches running the file from its own dir).
+        module_name = path.stem
+        root = path.resolve().parent
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    try:
+        return importlib.import_module(module_name)
+    except click.ClickException:
+        raise
+    except Exception as e:
+        raise click.ClickException(f"Failed to load {path}: {type(e).__name__}: {e}") from e
 
 
 def _expand_paths(paths: Tuple[Path, ...]) -> List[Path]:
@@ -384,7 +414,7 @@ def register(
         raise click.ClickException("No python files found in the given paths")
     for f in files:
         try:
-            _load_file(f)
+            _import_file(f, Path(root_dir) if root_dir else None)
         except Exception as e:
             if not skip_errors:
                 raise

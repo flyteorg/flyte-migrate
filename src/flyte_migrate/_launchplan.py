@@ -13,17 +13,48 @@ This module provides:
   that creates or retrieves triggers on the parent ``TaskEnvironment``.
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import flytekit
 from flyte import TaskEnvironment
 from flyte._logging import logger
 from flyte._task import AsyncFunctionTaskTemplate
 from flyte._trigger import Cron, FixedRate, Trigger
+from flyte.models import ActionPhase
+from flyte.notify import Email, Notification
 from flytekit.models import common as _common_models
 from flytekit.models import schedule as _schedule_model
+from flytekit.models.core.execution import WorkflowExecutionPhase
 
 from ._workflow import parent_env_for
+
+# v1 notification phases are ints; v2 wants ActionPhase values. Only terminal phases
+# are valid for v1 notifications.
+_PHASE_V1_TO_V2 = {
+    WorkflowExecutionPhase.SUCCEEDED: ActionPhase.SUCCEEDED,
+    WorkflowExecutionPhase.FAILED: ActionPhase.FAILED,
+    WorkflowExecutionPhase.TIMED_OUT: ActionPhase.TIMED_OUT,
+    WorkflowExecutionPhase.ABORTED: ActionPhase.ABORTED,
+}
+
+
+def _translate_notifications(
+    notifications: Optional[List[_common_models.Notification]],
+) -> Optional[Tuple[Notification, ...]]:
+    """Convert v1 ``Notification`` models into v2 ``flyte.notify`` notifications.
+
+    v1 email/slack/pagerduty notifications all deliver by emailing a recipient list
+    (slack/pagerduty use their email gateways), so each maps to a v2 ``Email``.
+    """
+    v2_notifications = []
+    for n in notifications or []:
+        phases = tuple(_PHASE_V1_TO_V2[p] for p in n.phases if p in _PHASE_V1_TO_V2)
+        if not phases:
+            continue
+        for delivery in (n.email, n.slack, n.pager_duty):
+            if delivery and delivery.recipients_email:
+                v2_notifications.append(Email(on_phase=phases, recipients=tuple(delivery.recipients_email)))
+    return tuple(v2_notifications) or None
 
 
 def merge_inputs(
@@ -81,6 +112,7 @@ def schedule_to_trigger(
     auto_activate: bool = False,
     labels: Optional[_common_models.Labels] = None,
     annotations: Optional[_common_models.Annotations] = None,
+    notifications: Optional[List[_common_models.Notification]] = None,
 ) -> Optional[Trigger]:
     """Convert a v1 ``Schedule`` into a v2 ``Trigger``.
 
@@ -98,6 +130,7 @@ def schedule_to_trigger(
         auto_activate=auto_activate,
         labels=dict(labels.values.items()) if labels else None,
         annotations=dict(annotations.values.items()) if annotations else None,
+        notifications=_translate_notifications(notifications),
     )
 
 
@@ -117,6 +150,9 @@ class LaunchPlanTransformer:
         default_inputs: Optional[Dict[str, Any]] = None,
         fixed_inputs: Optional[Dict[str, Any]] = None,
         schedule: Optional[_schedule_model.Schedule] = None,
+        notifications: Optional[List[_common_models.Notification]] = None,
+        labels: Optional[_common_models.Labels] = None,
+        annotations: Optional[_common_models.Annotations] = None,
         overwrite_cache: Optional[bool] = None,
         auto_activate: bool = False,
         **kwargs: Any,
@@ -126,8 +162,9 @@ class LaunchPlanTransformer:
         If a trigger with the same *name* already exists on the task template,
         this is a no-op (idempotent).
         """
-        if kwargs:
-            logger.debug(f"Unsupported args in v2 trigger {kwargs.values()}")
+        dropped = sorted(k for k, v in kwargs.items() if v is not None)
+        if dropped:
+            logger.warning(f"LaunchPlan args not supported by flyte-migrate and ignored: {dropped}")
 
         parent_env = parent_env_for(workflow.func.__module__)
         task_name = parent_env.name + "." + workflow.func.__name__
@@ -149,6 +186,9 @@ class LaunchPlanTransformer:
             fixed_inputs=fixed_inputs,
             overwrite_cache=overwrite_cache,
             auto_activate=auto_activate,
+            labels=labels,
+            annotations=annotations,
+            notifications=notifications,
         )
         if trigger is not None and hasattr(task_template, "triggers"):
             task_template.triggers += (trigger,)
@@ -156,9 +196,21 @@ class LaunchPlanTransformer:
         return parent_env
 
     @classmethod
-    def get_or_create(cls, **kwargs: Any) -> TaskEnvironment:
-        """Alias for ``create`` -- v1 API compatibility."""
-        return cls.create(**kwargs)
+    def get_or_create(
+        cls,
+        workflow: Optional[AsyncFunctionTaskTemplate] = None,
+        name: Optional[str] = None,
+        **kwargs: Any,
+    ) -> TaskEnvironment:
+        """Alias for ``create`` matching v1's argument order.
+
+        v1's ``get_or_create(workflow, name=None, ...)`` takes the workflow first and
+        defaults the name to the workflow's own name; ``create(name, workflow, ...)``
+        is the other way round.  Support both calling conventions.
+        """
+        if workflow is None:
+            workflow = kwargs.pop("workflow")
+        return cls.create(name or workflow.func.__name__, workflow, **kwargs)
 
 
 flytekit.LaunchPlan = LaunchPlanTransformer

@@ -4,6 +4,7 @@ import functools
 from unittest.mock import MagicMock, patch
 
 import flytekit
+import pytest
 
 import flyte_migrate  # noqa: F401 — triggers patching
 from flyte_migrate._map import MapShim
@@ -16,7 +17,7 @@ class TestMapShimInit:
         assert shim.target is target
         assert shim.concurrency is None
         assert shim.min_successes is None
-        assert shim.min_success_ratio is None
+        assert shim.min_success_ratio == 1.0
 
     def test_init_with_params(self):
         target = MagicMock()
@@ -59,6 +60,51 @@ class TestMapShimCall:
         result = shim([1, 2, 3])
         assert isinstance(result, list)
         assert result == [1, 2, 3]
+
+
+class TestMapShimFailureSemantics:
+    @patch("flyte_migrate._map.flyte.map")
+    def test_failure_raises_by_default(self, mock_map):
+        """v1 semantics: with the default min_success_ratio=1.0, any failure raises."""
+        boom = ValueError("boom")
+        mock_map.return_value = [1, boom, 9]
+        with pytest.raises(ValueError, match="boom"):
+            MapShim(MagicMock())([1, 2, 3])
+
+    @patch("flyte_migrate._map.flyte.map")
+    def test_ratio_met_replaces_failures_with_none(self, mock_map):
+        mock_map.return_value = [1, ValueError("boom"), 9]
+        result = MapShim(MagicMock(), min_success_ratio=0.5)([1, 2, 3])
+        assert result == [1, None, 9]
+
+    @patch("flyte_migrate._map.flyte.map")
+    def test_ratio_not_met_raises(self, mock_map):
+        mock_map.return_value = [ValueError("a"), ValueError("b"), 9]
+        with pytest.raises(ValueError, match="a"):
+            MapShim(MagicMock(), min_success_ratio=0.5)([1, 2, 3])
+
+    @patch("flyte_migrate._map.flyte.map")
+    def test_min_successes_met(self, mock_map):
+        mock_map.return_value = [1, ValueError("boom"), 9]
+        result = MapShim(MagicMock(), min_successes=2)([1, 2, 3])
+        assert result == [1, None, 9]
+
+    @patch("flyte_migrate._map.flyte.map")
+    def test_min_successes_not_met_raises(self, mock_map):
+        mock_map.return_value = [1, ValueError("boom"), ValueError("boom2")]
+        with pytest.raises(ValueError, match="boom"):
+            MapShim(MagicMock(), min_successes=2)([1, 2, 3])
+
+    @patch("flyte_migrate._map.flyte.map")
+    def test_concurrency_forwarded(self, mock_map):
+        mock_map.return_value = [1]
+        target = MagicMock()
+        MapShim(target, concurrency=4)([1])
+        mock_map.assert_called_once_with(target, [1], concurrency=4)
+
+    def test_run_all_sub_nodes_accepted(self):
+        """v1 arg accepted; v2 always runs every sub-task, so nothing to forward."""
+        MapShim(MagicMock(), run_all_sub_nodes=True)
 
 
 class TestMapTaskPatch:

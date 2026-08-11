@@ -6,10 +6,20 @@ call.  Heavy lifting (cache policy, resource merging, environment construction) 
 delegated to focused helper functions so the top-level decorator stays readable.
 """
 
+# Annotations below name flytekit.Cache, which only exists in newer flytekit. The shim is
+# pip-installed into the user's own v1 image, whose flytekit we do not control, so keep
+# annotations lazy — nothing here introspects them at runtime, and an eager
+# ``Union[bool, flytekit.Cache]`` makes the whole module fail to import on older images
+# with "AttributeError: module 'flytekit' has no attribute 'Cache'".
+from __future__ import annotations
+
+import asyncio
 import datetime
+import functools
 from typing import Callable, Dict, List, Literal, Optional, ParamSpec, TypeVar, Union, cast
 
 import flyte
+import flyte.report
 import flytekit
 from flyte._logging import logger
 from flytekit.extras.accelerators import BaseAccelerator
@@ -32,6 +42,48 @@ from flyte_migrate._workflow import module_slug, parent_env_for
 # the kubernetes client, whichever task actually declared the template.
 _pod_template_modules: set = set()
 
+
+def _flush_deck_at_exit(fn: Callable) -> Callable:
+    """Wrap *fn* so its deck is flushed when the task ends, as v1 does.
+
+    v2's own end-of-task flush is unreliable: flyte 2.5.18's taskrunner binds
+    ``ctx = internal_ctx()`` before ``with ctx.replace_task_context(tctx)``, so its later
+    ``if ctx.get_report()`` guard reads the *parent's* task context — ``None`` for a leaf
+    task — and the flush is skipped. Content appended after the last explicit
+    ``Deck.publish()`` then never reaches the UI. ``flyte.report.flush`` is a no-op outside
+    a task context, so this is harmless locally.
+    """
+
+    def _flush() -> None:
+        try:
+            flyte.report.flush()
+        except Exception:  # never let a flush failure replace the task's own exception
+            logger.warning("Failed to flush deck at task exit", exc_info=True)
+
+    if asyncio.iscoroutinefunction(fn):
+
+        @functools.wraps(fn)
+        async def async_wrapper(*args, **kwargs):
+            try:
+                return await fn(*args, **kwargs)
+            finally:
+                try:
+                    await flyte.report.flush.aio()
+                except Exception:
+                    logger.warning("Failed to flush deck at task exit", exc_info=True)
+
+        return async_wrapper
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            _flush()
+
+    return wrapper
+
+
 P = ParamSpec("P")  # capture the function's parameters
 R = TypeVar("R")  # return type
 T = TypeVar("T")  # task config
@@ -41,13 +93,26 @@ T = TypeVar("T")  # task config
 # ---------------------------------------------------------------------------
 
 
-def _translate_cache_policy(cache: Union[bool, flytekit.Cache]) -> Literal["auto", "disable"]:
-    """Convert a v1 cache flag into the v2 cache policy string.
+def _translate_cache_policy(cache: Union[bool, flytekit.Cache]) -> Union[Literal["auto", "disable"], flyte.Cache]:
+    """Convert a v1 cache flag or ``Cache`` object into the v2 cache policy.
 
     In v1, ``cache=True`` enables caching while ``cache=False`` (the default) disables
-    it.  The v2 API expects the strings ``"auto"`` or ``"disable"``.
+    it.  A v1 ``Cache`` object carries version/serialize/ignored_inputs/salt, all of
+    which v2's ``flyte.Cache`` supports directly.  v1 ``policies`` are computed
+    client-side into the version by flytekit, which v2 does not do — log and ignore.
     """
-    return "auto" if cache else "disable"
+    if isinstance(cache, bool):
+        return "auto" if cache else "disable"
+    if getattr(cache, "policies", None):
+        logger.warning("v1 Cache.policies are not supported on v2; using auto/override versioning instead")
+    version = getattr(cache, "version", None)
+    return flyte.Cache(
+        behavior="override" if version else "auto",
+        version_override=version,
+        serialize=getattr(cache, "serialize", False),
+        ignored_inputs=getattr(cache, "ignored_inputs", ()),
+        salt=getattr(cache, "salt", ""),
+    )
 
 
 def _build_task_environment(
@@ -147,7 +212,8 @@ def task_shim(
     parameters do not break existing code.
     """
     if kwargs:
-        logger.debug(f"Unsupported args {kwargs.values()}")
+        # Name the ignored args so migrating users can see exactly what was dropped.
+        logger.warning(f"@task args not supported by flyte-migrate and ignored: {sorted(kwargs)}")
 
     def v2_decorator(_task_function: Optional[Callable[P, R]] = None) -> Callable[P, R]:
         if _task_function is None:
@@ -175,7 +241,7 @@ def task_shim(
             report=bool(enable_deck),
             timeout=timeout,
             interruptible=interruptible,
-        )(_task_function)
+        )(_flush_deck_at_exit(_task_function) if enable_deck else _task_function)
 
     if _task_function is None:
         return v2_decorator
