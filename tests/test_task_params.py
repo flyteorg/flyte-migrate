@@ -232,3 +232,26 @@ class TestTaskShim:
                 return x
 
         assert callable(my_task)
+
+
+class TestV2ImagePassthrough:
+    def test_v2_image_used_as_is(self):
+        """A v2 flyte.Image as container_image must be passed through untouched."""
+        v2_image = flyte.Image.from_debian_base().with_pip_packages("flytekit", "flyte-migrate", "pandas")
+        env = _build_task_environment(
+            dummy_fn,
+            cache=False,
+            task_config=None,
+            container_image=v2_image,
+            environment=None,
+            requests=None,
+            limits=None,
+            resources=None,
+            accelerator=None,
+            shared_memory=None,
+            secret_requests=None,
+            docs=None,
+            pod_template=None,
+            pod_template_name=None,
+        )
+        assert env.image is v2_image
