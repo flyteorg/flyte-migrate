@@ -216,6 +216,42 @@ def test_edge_cases_error():
 
 
 # =============================================================================
+# GATES, RAW CONTAINERS, V1 TYPES
+# =============================================================================
+
+
+def test_gate_sleep():
+    from examples.gate_example import sleep_wf
+
+    _run_and_wait(sleep_wf, x=5)
+
+
+def test_gate_approval_times_out():
+    """Nobody is around to click approve — the condition times out and the run FAILs."""
+    from examples.gate_example import approval_wf
+
+    _run_and_wait(approval_wf, expect=ActionPhase.FAILED, x=5)
+
+
+def test_container_task():
+    from examples.container_task_example import wf
+
+    _run_and_wait(wf, a=3.0, b=4.0)
+
+
+def test_flyte_directory():
+    from examples.flyte_directory_example import wf
+
+    _run_and_wait(wf, n=3)
+
+
+def test_structured_dataset():
+    from examples.structured_dataset_example import wf
+
+    _run_and_wait(wf, rows=5)
+
+
+# =============================================================================
 # IMAGES
 # =============================================================================
 

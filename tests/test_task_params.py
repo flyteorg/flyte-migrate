@@ -21,6 +21,30 @@ class TestTranslateCachePolicy:
     def test_false_returns_disable(self):
         assert _translate_cache_policy(False) == "disable"
 
+    def test_cache_object_with_version_becomes_override(self):
+        # Stand-in with v1 Cache's fields — constructing a real flytekit.Cache pulls in
+        # plugin machinery unrelated to the translation, which duck-types via getattr.
+        from types import SimpleNamespace
+
+        v1 = SimpleNamespace(version="v3", serialize=True, ignored_inputs=("a",), salt="s", policies=None)
+        v2 = _translate_cache_policy(v1)
+        assert isinstance(v2, flyte.Cache)
+        assert v2.behavior == "override"
+        assert v2.version_override == "v3"
+        assert v2.serialize is True
+        assert v2.ignored_inputs == ("a",)
+        assert v2.salt == "s"
+
+    def test_cache_object_without_version_becomes_auto(self):
+        from types import SimpleNamespace
+
+        v2 = _translate_cache_policy(
+            SimpleNamespace(version=None, serialize=False, ignored_inputs=(), salt="", policies=None)
+        )
+        assert isinstance(v2, flyte.Cache)
+        assert v2.behavior == "auto"
+        assert v2.version_override is None
+
 
 # ---------------------------------------------------------------------------
 # _build_task_environment
