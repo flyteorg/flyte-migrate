@@ -22,6 +22,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 import flytekit
 from flyte import Image, Resources, TaskEnvironment
+from flyte._logging import logger
 
 
 def _flyte_migrate_requirement() -> str:
@@ -109,15 +110,40 @@ def parent_env_for(module: Optional[str]) -> TaskEnvironment:
     return env
 
 
-def workflow_shim(_workflow_function: Optional[Callable] = None, **kwargs: Any) -> Any:
+def workflow_shim(
+    _workflow_function: Optional[Callable] = None,
+    failure_policy: Any = None,
+    interruptible: bool = False,
+    on_failure: Any = None,
+    docs: Any = None,
+    pickle_untyped: bool = False,
+    default_options: Any = None,
+    **kwargs: Any,
+) -> Any:
     """Drop-in replacement for ``flytekit.workflow``.
 
     Supports both the bare ``@workflow`` and parameterised ``@workflow(...)`` forms, and
     routes each function through the parent environment of the module that defines it.
+
+    ``interruptible`` is forwarded to the v2 task.  The remaining v1-only parameters
+    have no v2 equivalent (v2 workflows are plain Python — failures propagate as
+    exceptions, so use ``try/except`` instead of ``failure_policy``/``on_failure``);
+    they are logged and ignored rather than breaking the decorator.
     """
+    dropped = {
+        "failure_policy": failure_policy,
+        "on_failure": on_failure,
+        "docs": docs,
+        "pickle_untyped": pickle_untyped,
+        "default_options": default_options,
+        **kwargs,
+    }
+    dropped_names = sorted(k for k, v in dropped.items() if v)
+    if dropped_names:
+        logger.warning(f"@workflow args not supported by flyte-migrate and ignored: {dropped_names}")
 
     def v2_decorator(fn: Callable) -> Any:
-        return parent_env_for(fn.__module__).task(**kwargs)(fn)
+        return parent_env_for(fn.__module__).task(interruptible=interruptible or None)(fn)
 
     if _workflow_function is None:
         return v2_decorator
