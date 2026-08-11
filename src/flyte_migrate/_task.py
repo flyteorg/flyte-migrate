@@ -34,6 +34,7 @@ from flyte_migrate._image import (
 )
 from flyte_migrate._plugins import _transform_plugin_config_v1_to_v2
 from flyte_migrate._pod_template import _transform_pod_template_v1_to_v2
+from flyte_migrate._resolver import MigrateTaskResolver
 from flyte_migrate._resource import _transform_resource_v1_to_v2
 from flyte_migrate._secret import _transform_secret_v1_to_v2
 from flyte_migrate._workflow import module_slug, parent_env_for
@@ -236,12 +237,16 @@ def task_shim(
             pod_template_name=pod_template_name,
         )
         _register_task_environment(env, container_image, _task_function.__module__, pod_template, task_config)
-        return env.task(
+        tmpl = env.task(
             retries=retries,
             report=bool(enable_deck),
             timeout=timeout,
             interruptible=interruptible,
         )(_flush_deck_at_exit(_task_function) if enable_deck else _task_function)
+        # The container resolves tasks by importing the user module; this resolver applies
+        # the shim first so files without `import flyte_migrate` still load as v2 tasks.
+        tmpl.task_resolver = MigrateTaskResolver()
+        return tmpl
 
     if _task_function is None:
         return v2_decorator
