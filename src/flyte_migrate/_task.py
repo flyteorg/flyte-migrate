@@ -13,10 +13,13 @@ delegated to focused helper functions so the top-level decorator stays readable.
 # with "AttributeError: module 'flytekit' has no attribute 'Cache'".
 from __future__ import annotations
 
+import asyncio
 import datetime
+import functools
 from typing import Callable, Dict, List, Literal, Optional, ParamSpec, TypeVar, Union, cast
 
 import flyte
+import flyte.report
 import flytekit
 from flyte._logging import logger
 from flytekit.extras.accelerators import BaseAccelerator
@@ -38,6 +41,48 @@ from flyte_migrate._workflow import module_slug, parent_env_for
 # Modules known to build a v1 PodTemplate at import time; every task env from one needs
 # the kubernetes client, whichever task actually declared the template.
 _pod_template_modules: set = set()
+
+
+def _flush_deck_at_exit(fn: Callable) -> Callable:
+    """Wrap *fn* so its deck is flushed when the task ends, as v1 does.
+
+    v2's own end-of-task flush is unreliable: flyte 2.5.18's taskrunner binds
+    ``ctx = internal_ctx()`` before ``with ctx.replace_task_context(tctx)``, so its later
+    ``if ctx.get_report()`` guard reads the *parent's* task context — ``None`` for a leaf
+    task — and the flush is skipped. Content appended after the last explicit
+    ``Deck.publish()`` then never reaches the UI. ``flyte.report.flush`` is a no-op outside
+    a task context, so this is harmless locally.
+    """
+
+    def _flush() -> None:
+        try:
+            flyte.report.flush()
+        except Exception:  # never let a flush failure replace the task's own exception
+            logger.warning("Failed to flush deck at task exit", exc_info=True)
+
+    if asyncio.iscoroutinefunction(fn):
+
+        @functools.wraps(fn)
+        async def async_wrapper(*args, **kwargs):
+            try:
+                return await fn(*args, **kwargs)
+            finally:
+                try:
+                    await flyte.report.flush.aio()
+                except Exception:
+                    logger.warning("Failed to flush deck at task exit", exc_info=True)
+
+        return async_wrapper
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            _flush()
+
+    return wrapper
+
 
 P = ParamSpec("P")  # capture the function's parameters
 R = TypeVar("R")  # return type
@@ -196,7 +241,7 @@ def task_shim(
             report=bool(enable_deck),
             timeout=timeout,
             interruptible=interruptible,
-        )(_task_function)
+        )(_flush_deck_at_exit(_task_function) if enable_deck else _task_function)
 
     if _task_function is None:
         return v2_decorator
