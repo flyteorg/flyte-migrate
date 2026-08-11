@@ -17,12 +17,15 @@ defining module (see :mod:`flyte_migrate._workflow`) — six examples define ``w
 under a single shared parent environment importing two of them silently overwrote the
 first, then v2 rejected the duplicate environment name outright.
 
-Opt-in only: deselected by default (`addopts = -m 'not integration'`) and skipped without
-FLYTE_API_KEY, so the normal `uv run pytest` is unaffected.
+Opt-in only: deselected by default (`addopts = -m 'not integration'`), so the normal
+`uv run pytest` is unaffected. Auth is either a FLYTE_API_KEY, or — when unset — the
+standard flyte config discovery (FLYTECTL_CONFIG, ~/.flyte/config.yaml, ...) with PKCE
+browser login, so local runs need no key at all.
 
-    FLYTE_API_KEY=... uv run pytest tests/integration -v -s -m integration
-    FLYTE_API_KEY=... uv run pytest tests/integration -v -s -m "integration and not plugins"
-    FLYTE_API_KEY=... uv run pytest tests/integration -v -s -m integration -k hello
+    uv run pytest tests/integration -v -s -m integration                     # config + PKCE
+    FLYTE_API_KEY=... uv run pytest tests/integration -v -s -m integration   # api key (CI)
+    uv run pytest tests/integration -v -s -m "integration and not plugins"
+    uv run pytest tests/integration -v -s -m integration -k hello
 
 The `plugins` marker covers examples needing cluster operators (Spark/Ray/Dask/PyTorch) or
 external services (BigQuery). The secret examples need an `API_TOKEN` secret in the target
@@ -40,21 +43,24 @@ from flyte.models import ActionPhase
 
 ROOT = Path(__file__).parents[2]
 
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(not os.getenv("FLYTE_API_KEY"), reason="FLYTE_API_KEY not set"),
-]
+pytestmark = [pytest.mark.integration]
 
 
 @pytest.fixture(scope="session", autouse=True)
 def flyte_client():
-    flyte.init_from_api_key(
-        project=os.getenv("FLYTE_PROJECT", "flyte-migrate"),
-        domain=os.getenv("FLYTE_DOMAIN", "development"),
-        image_builder="remote",
+    kwargs = {
+        "project": os.getenv("FLYTE_PROJECT", "flyte-migrate"),
+        "domain": os.getenv("FLYTE_DOMAIN", "development"),
+        "image_builder": "remote",
         # bundle root = repo root, so src/flyte_migrate ships with the code bundle
-        root_dir=ROOT,
-    )
+        "root_dir": ROOT,
+    }
+    if os.getenv("FLYTE_API_KEY"):
+        flyte.init_from_api_key(**kwargs)
+    else:
+        # No api key: standard config discovery (FLYTECTL_CONFIG, ~/.flyte/config.yaml,
+        # ...) and PKCE browser login on first use.
+        flyte.init_from_config(**kwargs)
     yield flyte
 
 
