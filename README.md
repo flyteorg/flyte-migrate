@@ -32,6 +32,13 @@
 
 **That's it.** Your v1 workflow now runs on Flyte v2.
 
+> [!NOTE]
+> `flyte-migrate` is a quick way to try Flyte v2 without changing any code, but it may hit
+> edge cases that are not covered yet or cannot be migrated automatically (see
+> [Known Limitations](#known-limitations)). For a long-term migration we still recommend
+> rewriting your workflows with the v2 SDK, following the
+> [migration guide](https://www.union.ai/docs/v2/flyte/user-guide/migration/flyte-2/).
+
 ## Why flyte-migrate?
 
 | Challenge | Without flyte-migrate | With flyte-migrate |
