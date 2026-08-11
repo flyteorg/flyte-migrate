@@ -29,6 +29,8 @@ class TestConstruction:
         assert ct.name == f"{parent_env.name}.calculate-ellipse-area"
         assert ct.short_name == "calculate-ellipse-area"
         assert parent_env._tasks[ct.name] is ct
+        # v1 workflows call tasks synchronously; without this the call returns a coroutine
+        assert ct._call_as_synchronous is True
 
     def test_resources_and_metadata_format_translated(self):
         ct = flytekit.ContainerTask(

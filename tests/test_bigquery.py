@@ -92,6 +92,8 @@ class TestCreateBigQueryTaskTemplate:
         assert tmpl.project_id == "flyte"
         assert tmpl.query_template == "SELECT 1"
         assert "sql.bigquery.no_io" in tmpl.name
+        # v1 workflows call tasks synchronously; without this the call returns a coroutine
+        assert tmpl._call_as_synchronous is True
 
     def test_with_inputs(self):
         cfg = BigQueryConfig(ProjectID="flyte")
