@@ -102,6 +102,10 @@ def container_task_shim(
         parent_env_name=parent_env.name,
         **{k: v for k, v in extra.items() if v is not None},
     )
+    # v1 code calls the task synchronously from the shimmed (sync) workflow. Raw v2
+    # templates default to async calling, which would hand the caller the controller's
+    # submit coroutine instead of the result.
+    tmpl._call_as_synchronous = True
     parent_env._tasks[tmpl.name] = tmpl
     return tmpl
 

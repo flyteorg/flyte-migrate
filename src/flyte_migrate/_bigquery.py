@@ -107,6 +107,9 @@ def _create_bigquery_task_template(
         parent_env=weakref.ref(parent_env),
         parent_env_name=parent_env.name,
     )
+    # Same as the ContainerTask shim: v1 workflows call tasks synchronously, so the call
+    # must block on the controller instead of returning its submit coroutine.
+    tmpl._call_as_synchronous = True
     parent_env._tasks[tmpl.name] = tmpl
     return tmpl
 
