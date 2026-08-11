@@ -188,35 +188,35 @@ All v1 type patterns work transparently through the shim:
 ## Architecture
 
 ```
-┌─────────────────────────────────────┐
-│         Your v1 Code                │
-│  @task, @workflow, ImageSpec, ...   │
-└──────────────┬──────────────────────┘
-               │  import flyte_migrate
-               ▼
-┌─────────────────────────────────────┐
-│         flyte-migrate shim          │
-│                                     │
-│  _task.py      → @task decorator    │
-│  _workflow.py  → @workflow decorator│
-│  _dynamic.py   → @dynamic decorator│
-│  _map.py       → map_task()        │
-│  _launchplan.py→ LaunchPlan        │
-│  _reference.py → @reference_task   │
-│  _image.py     → ImageSpec→Image   │
-│  _resource.py  → Resources merge   │
-│  _secret.py    → Secret transform  │
-│  _pod_template.py → PodTemplate    │
-│  _deck.py      → Deck→Report      │
-│  _context.py   → ExecutionParams   │
-│  _plugins/     → Spark,Ray,Dask,...│
-└──────────────┬──────────────────────┘
-               │  translated v2 calls
-               ▼
-┌─────────────────────────────────────┐
-│         Flyte v2 SDK                │
-│  TaskEnvironment, Image, Resources  │
-└─────────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│               Your v1 Code               │
+│     @task, @workflow, ImageSpec, ...     │
+└────────────────────┬─────────────────────┘
+                     │  import flyte_migrate
+                     ▼
+┌──────────────────────────────────────────┐
+│            flyte-migrate shim            │
+│                                          │
+│  _task.py         → @task decorator      │
+│  _workflow.py     → @workflow decorator  │
+│  _dynamic.py      → @dynamic decorator   │
+│  _map.py          → map_task()           │
+│  _launchplan.py   → LaunchPlan           │
+│  _reference.py    → @reference_task      │
+│  _image.py        → ImageSpec → Image    │
+│  _resource.py     → Resources merge      │
+│  _secret.py       → Secret transform     │
+│  _pod_template.py → PodTemplate          │
+│  _deck.py         → Deck → Report        │
+│  _context.py      → ExecutionParams      │
+│  _plugins/        → Spark, Ray, Dask, ...│
+└────────────────────┬─────────────────────┘
+                     │  translated v2 calls
+                     ▼
+┌──────────────────────────────────────────┐
+│               Flyte v2 SDK               │
+│    TaskEnvironment, Image, Resources     │
+└──────────────────────────────────────────┘
 ```
 
 ## Known Limitations
