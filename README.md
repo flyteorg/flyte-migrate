@@ -138,14 +138,14 @@ from flytekit import task, workflow
 # v2 image API, used by a v1 task
 image = flyte.Image.from_debian_base().with_pip_packages("flytekit", "flyte-migrate", "pandas")
 
-@task(container_image=image, cache=True, retries=2)   # still v1
+@task(container_image=image, cache=True, retries=2)  # still v1
 def summarize(name: str) -> str:
     import pandas as pd
 
     df = pd.DataFrame({"name": [name]})
     return f"Hello, {df.at[0, 'name']}!"
 
-@workflow                                             # still v1
+@workflow  # still v1
 def wf(name: str) -> str:
     return summarize(name=name)
 ```
