@@ -20,6 +20,10 @@ Flyte v2 is a **fundamentally redesigned** SDK that shifts from imperative workf
 | Return types | ✅ Full support | Primitives (int, float, str, bool), List, Dict, Optional, NamedTuple, Dataclass, custom types |
 | FlyteFile / FlyteDirectory | ✅ Full support | In `flyte.io` module; `File` and `Dir` classes |
 | StructuredDataset | ✅ Full support | Typed columnar I/O; pandas DataFrame support via transformers |
+| Reference tasks/workflows | ✅ Full support | `flyte.remote.TaskDetails.get(...)`; the shim maps `reference_task`, `reference_workflow`, and `reference_launch_plan` onto it |
+| Gate / approval nodes | ✅ Full support | `approve` / `wait_for_input` shimmed onto `flyte.new_condition(...).wait()`; payloads must be `bool`/`int`/`float`/`str` |
+| Custom types | ✅ Full support | Dataclasses, NamedTuple, or custom TypeTransformers |
+| Implicit dependency inference | ✅ Full support | v2 workflows are pure Python; dependencies implicit from dataflow |
 
 ### Task Configuration
 
@@ -81,10 +85,9 @@ Flyte v2 is a **fundamentally redesigned** SDK that shifts from imperative workf
 
 | Feature | v1 Equivalent | v2 Status | Workaround |
 |---------|----------------|-----------|-----------|
-| **Reference Tasks/Workflows** | `reference_task`, `reference_workflow`, `reference_launch_plan` | ✅ Supported | `flyte.remote.TaskDetails.get(...)`; the shim maps all three decorators onto it |
 | **SQL Tasks** | `SQLTask` | ⚠️ Partial | BigQuery agent-based only; other SQL engines not directly supported |
 | **Sensor Tasks** | `SensorTask` (manual polling) | ❌ Not in v2 SDK | Implement as a polling loop in a task, a custom agent, or an external trigger |
-| **Gate/Approval Nodes** | `approve`, `wait_for_input` | ✅ Supported | Shimmed onto `flyte.new_condition(...).wait()`. v2 limitation: condition payloads must be `bool`/`int`/`float`/`str` — v1 `wait_for_input` allowed arbitrary `expected_type`s |
+| **`wait_for_input` payload types** | arbitrary `expected_type` | ⚠️ Partial | The gate itself is supported; v2 conditions carry only `bool`/`int`/`float`/`str` |
 | **Sleep Gate** | `sleep(duration)` | ⚠️ Partial | Shimmed as `time.sleep` in the workflow driver container (already alive for the whole run in shimmed mode); v2's backend `core-sleep` plugin exists if driver time matters |
 | **Notifications** | `Notification` on LaunchPlan | ⚠️ Trigger-level only | v2 `flyte.notify` (Email, Slack webhook, Teams, Webhook) attaches to `Trigger`s, not ad-hoc runs; the shim maps v1 email/slack/pagerduty recipients to v2 `Email` |
 | **Node-level metadata** | `node_name`, timeout at node level | ⚠️ Partial | Task-level timeout supported; node naming implicit from function names |
@@ -94,8 +97,6 @@ Flyte v2 is a **fundamentally redesigned** SDK that shifts from imperative workf
 | **Workflow failure handling** | `failure_policy`, `on_failure` | ❌ Not in v2 SDK | v2 workflows are plain Python — use `try/except` around task calls |
 | **map_task partial success** | `min_successes`, `min_success_ratio` | ⚠️ Client-side | `flyte.map()` returns failures as exceptions (`return_exceptions=True`); the shim enforces the threshold and substitutes `None`, matching v1 semantics |
 | **Eager workflows** | `@eager` | ❌ No shim | v2 tasks are already async Python — call tasks with `await` directly; no translation implemented |
-| **Custom types** | Type system for domain objects | ✅ Supported | Use dataclasses, NamedTuple, or custom TypeTransformers |
-| **Implicit dependency inference** | DAG inferred from code | ✅ Full support | v2 workflows = pure Python; dependencies implicit |
 
 ### Node Timeout vs. Task Timeout
 
