@@ -179,7 +179,9 @@ See [`examples/v2_image.py`](examples/v2_image.py) for the full runnable version
 | `map_task()` | `flyte.map()` | Supported (incl. concurrency) |
 | `LaunchPlan` | `Trigger` (Cron / FixedRate) | Fully supported |
 | `Deck` | `flyte.report` | Fully supported |
-| `@reference_task` | `TaskDetails.get()` | Fully supported |
+| `@reference_task` / `@reference_workflow` / `@reference_launch_plan` | `TaskDetails.get()` | Fully supported |
+| `wait_for_input()` / `approve()` | `flyte.new_condition(...).wait()` | Supported (see gate node note) |
+| `sleep()` | `time.sleep` in the workflow driver | Fully supported |
 
 ### Task Parameters
 
@@ -187,7 +189,9 @@ All commonly used `@task` parameters are translated:
 
 | Parameter | Translation |
 |-----------|------------|
-| `cache` / `cache_version` | `cache="auto"` / `"disable"` |
+| `cache` | `cache="auto"` / `"disable"` |
+| `cache_version` (or `Cache(version=...)`) | `Cache(behavior="override", version_override=...)` |
+| `cache_serialize`, `cache_ignore_input_vars` | `Cache(serialize=...)` / `Cache(ignored_inputs=...)` |
 | `retries`, `timeout`, `interruptible` | Passed through directly |
 | `container_image` (str or `ImageSpec`) | Converted to `flyte.Image` |
 | `requests` / `limits` / `resources` | Merged into `flyte.Resources` |
@@ -281,9 +285,9 @@ Some v1 features have no v2 equivalent and are handled gracefully:
 |---------|----------|
 | `conda_packages` / `conda_channels` | Warning logged, ignored |
 | `builder="envd"` / `"noop"` | Warning logged, ignored |
-| `cache_version` | Accepted (no-op in v2) |
+| `wait_for_input` non-scalar `expected_type` | `TypeError` — v2 conditions carry `bool` / `int` / `float` / `str` only |
 | `execution_mode`, `task_resolver`, `pickle_untyped` | Logged, ignored |
-| `map_task` `min_successes` / `min_success_ratio` | Accepted but not forwarded (v2 doesn't support) |
+| `map_task` `min_successes` / `min_success_ratio` | Enforced client-side — v2 has no native equivalent |
 | `gpu` count without named accelerator | v2 requires device name (e.g. `"T4:1"`) |
 | `docs.long_description` | Only `short_description` is mapped |
 | `flytekit.conditional()` | Use native Python `if/else` in workflows |
@@ -303,12 +307,20 @@ The [`examples/`](examples/) directory contains runnable examples for every feat
 | [`image.py`](examples/image.py) | ImageSpec with packages, apt, env, commands |
 | [`v2_image.py`](examples/v2_image.py) | Mixing v1 and v2: a v1 task using a v2 `flyte.Image` |
 | [`pod_template_example.py`](examples/pod_template_example.py) | Pod customization with labels, annotations |
+| [`gate_example.py`](examples/gate_example.py) | Gate nodes: `sleep` and `approve` (pauses for a human) |
 | [`reference_task_example.py`](examples/reference_task_example.py) | Calling pre-registered remote tasks |
+| [`reference_workflow_example.py`](examples/reference_workflow_example.py) | Calling a pre-registered remote workflow |
+| [`reference_launch_plan_example.py`](examples/reference_launch_plan_example.py) | Calling a workflow by launch plan name |
 | [`datatypes_comprehensive.py`](examples/datatypes_comprehensive.py) | NamedTuple, dataclass, Enum, FlyteFile |
 | [`plugins/spark_example.py`](examples/plugins/spark_example.py) | Apache Spark jobs |
 | [`plugins/ray_example.py`](examples/plugins/ray_example.py) | Ray distributed computing |
 | [`plugins/pytorch_example.py`](examples/plugins/pytorch_example.py) | PyTorch distributed training |
 | [`plugins/dask_example.py`](examples/plugins/dask_example.py) | Dask parallel computing |
+
+> [!NOTE]
+> The three `reference_*` examples resolve a target that must already exist on the cluster.
+> Deploy [`reference_task_target.py`](examples/reference_task_target.py) first — running a
+> workflow does not register its tasks for reference lookup, only deploying does.
 
 ## Development
 

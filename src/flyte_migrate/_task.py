@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import functools
-from typing import Callable, Dict, List, Literal, Optional, ParamSpec, TypeVar, Union, cast
+from typing import Callable, Dict, List, Literal, Optional, ParamSpec, Tuple, TypeVar, Union, cast
 
 import flyte
 import flyte.report
@@ -94,16 +94,37 @@ T = TypeVar("T")  # task config
 # ---------------------------------------------------------------------------
 
 
-def _translate_cache_policy(cache: Union[bool, flytekit.Cache]) -> Union[Literal["auto", "disable"], flyte.Cache]:
+def _translate_cache_policy(
+    cache: Union[bool, flytekit.Cache],
+    cache_version: Optional[str] = None,
+    cache_serialize: Optional[bool] = None,
+    cache_ignore_input_vars: Optional[Tuple[str, ...]] = None,
+) -> Union[Literal["auto", "disable"], flyte.Cache]:
     """Convert a v1 cache flag or ``Cache`` object into the v2 cache policy.
 
     In v1, ``cache=True`` enables caching while ``cache=False`` (the default) disables
     it.  A v1 ``Cache`` object carries version/serialize/ignored_inputs/salt, all of
     which v2's ``flyte.Cache`` supports directly.  v1 ``policies`` are computed
     client-side into the version by flytekit, which v2 does not do — log and ignore.
+
+    The deprecated ``cache_version`` / ``cache_serialize`` / ``cache_ignore_input_vars``
+    ``@task`` arguments are honoured alongside ``cache=True``: an explicit version maps
+    to v2's ``behavior="override"``, which invalidates only when the version changes.
+    As in v1, they are ignored when a ``Cache`` object is passed.
     """
     if isinstance(cache, bool):
-        return "auto" if cache else "disable"
+        if not cache:
+            return "disable"
+        if cache_version is None and cache_serialize is None and cache_ignore_input_vars is None:
+            return "auto"
+        return flyte.Cache(
+            behavior="override" if cache_version else "auto",
+            version_override=cache_version,
+            serialize=bool(cache_serialize),
+            ignored_inputs=tuple(cache_ignore_input_vars or ()),
+        )
+    if cache_version is not None or cache_serialize is not None or cache_ignore_input_vars is not None:
+        logger.warning("cache_version/cache_serialize/cache_ignore_input_vars are ignored when a Cache is passed")
     if getattr(cache, "policies", None):
         logger.warning("v1 Cache.policies are not supported on v2; using auto/override versioning instead")
     version = getattr(cache, "version", None)
@@ -120,6 +141,9 @@ def _build_task_environment(
     task_function: Callable,
     *,
     cache: Union[bool, flytekit.Cache],
+    cache_version: Optional[str] = None,
+    cache_serialize: Optional[bool] = None,
+    cache_ignore_input_vars: Optional[Tuple[str, ...]] = None,
     task_config: Optional[T],
     container_image: Optional[Union[str, flytekit.ImageSpec]],
     environment: Optional[Dict[str, str]],
@@ -151,7 +175,7 @@ def _build_task_environment(
         secrets=_transform_secret_v1_to_v2(secret_requests),
         env_vars={**inherited_sys_path(), **(environment or {})} or None,
         image=image,
-        cache=_translate_cache_policy(cache),
+        cache=_translate_cache_policy(cache, cache_version, cache_serialize, cache_ignore_input_vars),
         plugin_config=_transform_plugin_config_v1_to_v2(task_config),
         description=docs.short_description if docs else None,
     )
@@ -189,6 +213,9 @@ def task_shim(
     _task_function: Optional[Callable[P, R]] = None,
     task_config: Optional[T] = None,
     cache: Union[bool, flytekit.Cache] = False,
+    cache_version: Optional[str] = None,
+    cache_serialize: Optional[bool] = None,
+    cache_ignore_input_vars: Optional[Tuple[str, ...]] = None,
     retries: int = 0,
     interruptible: Optional[bool] = None,
     timeout: Union[datetime.timedelta, int] = 0,
@@ -223,6 +250,9 @@ def task_shim(
         env = _build_task_environment(
             _task_function,
             cache=cache,
+            cache_version=cache_version,
+            cache_serialize=cache_serialize,
+            cache_ignore_input_vars=cache_ignore_input_vars,
             task_config=task_config,
             container_image=container_image,
             environment=environment,

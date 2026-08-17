@@ -182,6 +182,43 @@ class TestTaskShim:
 
         assert callable(cached_fn)
 
+    def test_cache_version_maps_to_override(self):
+        """cache_version should map to v2's behavior="override" with that version."""
+        policy = _translate_cache_policy(True, cache_version="2.0")
+
+        assert policy.behavior == "override"
+        assert policy.version_override == "2.0"
+
+    def test_cache_without_version_stays_auto(self):
+        """cache=True alone keeps v2's automatic (function-body) versioning."""
+        assert _translate_cache_policy(True) == "auto"
+
+    def test_cache_version_ignored_when_cache_disabled(self):
+        """cache=False wins over a stray cache_version, as in v1."""
+        assert _translate_cache_policy(False, cache_version="2.0") == "disable"
+
+    def test_deprecated_cache_serialize_and_ignored_inputs(self):
+        """cache_serialize / cache_ignore_input_vars ride along with cache=True."""
+        policy = _translate_cache_policy(True, cache_serialize=True, cache_ignore_input_vars=("t",))
+
+        assert policy.behavior == "auto"
+        assert policy.serialize is True
+        assert policy.ignored_inputs == ("t",)
+
+    def test_cache_object_version_maps_to_override(self):
+        """A v1 Cache(version=...) also maps to override — the non-deprecated spelling."""
+        policy = _translate_cache_policy(flytekit.Cache(version="3.0", salt="s", policies=[]))
+
+        assert policy.behavior == "override"
+        assert policy.version_override == "3.0"
+        assert policy.salt == "s"
+
+    def test_cache_object_wins_over_deprecated_args(self):
+        """As in v1, the Cache object takes precedence over the deprecated kwargs."""
+        policy = _translate_cache_policy(flytekit.Cache(version="3.0", policies=[]), cache_version="2.0")
+
+        assert policy.version_override == "3.0"
+
     def test_bare_decorator(self):
         """@task_shim without parentheses should work."""
 

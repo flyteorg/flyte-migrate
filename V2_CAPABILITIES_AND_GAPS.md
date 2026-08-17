@@ -20,12 +20,16 @@ Flyte v2 is a **fundamentally redesigned** SDK that shifts from imperative workf
 | Return types | ✅ Full support | Primitives (int, float, str, bool), List, Dict, Optional, NamedTuple, Dataclass, custom types |
 | FlyteFile / FlyteDirectory | ✅ Full support | In `flyte.io` module; `File` and `Dir` classes |
 | StructuredDataset | ✅ Full support | Typed columnar I/O; pandas DataFrame support via transformers |
+| Reference tasks/workflows | ✅ Full support | `flyte.remote.TaskDetails.get(...)`; the shim maps `reference_task`, `reference_workflow`, and `reference_launch_plan` onto it |
+| Gate / approval nodes | ✅ Full support | `approve` / `wait_for_input` shimmed onto `flyte.new_condition(...).wait()`; payloads must be `bool`/`int`/`float`/`str` |
+| Custom types | ✅ Full support | Dataclasses, NamedTuple, or custom TypeTransformers |
+| Implicit dependency inference | ✅ Full support | v2 workflows are pure Python; dependencies implicit from dataflow |
 
 ### Task Configuration
 
 | Feature | v2 Status | Notes |
 |---------|-----------|-------|
-| Caching | ✅ Full support | `cache` param: "auto", "override", "disable", or `Cache` object |
+| Caching | ✅ Full support | `cache` param: "auto", "override", "disable", or `Cache` object (`version_override`, `serialize`, `ignored_inputs`, `salt`, `policies`) |
 | Retries | ✅ Full support | `retries` param (int) or `RetryStrategy` object with exponential backoff |
 | Timeout | ✅ Full support | At task level (`timeout` param); timedelta or seconds |
 | Resource requests/limits | ✅ Full support | `Resources(cpu=..., memory=..., gpu=..., disk=...)` |
@@ -40,10 +44,10 @@ Flyte v2 is a **fundamentally redesigned** SDK that shifts from imperative workf
 
 | Plugin | v2 Status | Notes |
 |--------|-----------|-------|
-| **Spark** | ✅ Supported | `SparkConfiguration` config; driver/executor pod templates |
-| **Ray** | ✅ Supported | `RayJobConfiguration` config; head/worker node configs with autoscaling |
-| **Dask** | ✅ Supported | `DaskConfiguration` config; worker cluster specification |
-| **PyTorch** | ✅ Supported | `PyTorchConfiguration` config; multi-node distributed training |
+| **Spark** | ✅ Supported | `flyteplugins.spark.task.Spark` config; driver/executor pod templates |
+| **Ray** | ✅ Supported | `flyteplugins.ray.task.RayJobConfig`; head/worker node configs with autoscaling |
+| **Dask** | ✅ Supported | `flyteplugins.dask.task.Dask` config; worker cluster specification |
+| **PyTorch** | ✅ Supported | `flyteplugins.pytorch.task.Elastic` config; multi-node distributed training |
 | **BigQuery** | ✅ Supported | Agent-based task; SQL dialect support; project/location config |
 | **Raw Container** | ✅ Supported | `ContainerTask` in `flyte.extras`; arbitrary shell commands + I/O binding |
 
@@ -63,7 +67,7 @@ Flyte v2 is a **fundamentally redesigned** SDK that shifts from imperative workf
 | Remote execution | ✅ Full support | v2 Flyte cluster required; `flyte.run()` with `mode="remote"` |
 | Task environment | ✅ Full support | Group tasks by image/config; inherit defaults; per-task overrides |
 | Reusable environments | ✅ Full support | `ReusePolicy(concurrency, ttl)` for container reuse across invocations |
-| Reports (Deck) | ✅ Full support | `flyte.Deck()` + HTML content generation |
+| Reports (Deck) | ✅ Full support | `flyte.report` (`get_tab().log()`, `flush()`) + HTML content generation; there is no `flyte.Deck` |
 | Observability | ✅ Full support | Deck reports, structured logging, metrics |
 
 ### Conditionals & Branching
@@ -81,21 +85,18 @@ Flyte v2 is a **fundamentally redesigned** SDK that shifts from imperative workf
 
 | Feature | v1 Equivalent | v2 Status | Workaround |
 |---------|----------------|-----------|-----------|
-| **Reference Tasks/Workflows** | `reference_task`, `reference_workflow`, `reference_launch_plan` | ✅ Supported | `flyte.remote.TaskDetails.get(...)`; the shim maps all three decorators onto it |
 | **SQL Tasks** | `SQLTask` | ⚠️ Partial | BigQuery agent-based only; other SQL engines not directly supported |
 | **Sensor Tasks** | `SensorTask` (manual polling) | ❌ Not in v2 SDK | Implement as a polling loop in a task, a custom agent, or an external trigger |
-| **Gate/Approval Nodes** | `approve`, `wait_for_input` | ✅ Supported | Shimmed onto `flyte.new_condition(...).wait()`. v2 limitation: condition payloads must be `bool`/`int`/`float`/`str` — v1 `wait_for_input` allowed arbitrary `expected_type`s |
+| **`wait_for_input` payload types** | arbitrary `expected_type` | ⚠️ Partial | The gate itself is supported; v2 conditions carry only `bool`/`int`/`float`/`str` |
 | **Sleep Gate** | `sleep(duration)` | ⚠️ Partial | Shimmed as `time.sleep` in the workflow driver container (already alive for the whole run in shimmed mode); v2's backend `core-sleep` plugin exists if driver time matters |
 | **Notifications** | `Notification` on LaunchPlan | ⚠️ Trigger-level only | v2 `flyte.notify` (Email, Slack webhook, Teams, Webhook) attaches to `Trigger`s, not ad-hoc runs; the shim maps v1 email/slack/pagerduty recipients to v2 `Email` |
 | **Node-level metadata** | `node_name`, timeout at node level | ⚠️ Partial | Task-level timeout supported; node naming implicit from function names |
 | **LaunchPlan** | v1 `LaunchPlan` class | ⚠️ Partial | Converted to `Trigger` objects. No v2 equivalent for `max_parallelism`, `raw_output_data_config`, `security_context`/`auth_role`, `ConcurrencyPolicy`, or artifact-event triggers (`OnArtifact`) |
 | **Labels/Annotations on tasks** | `@task(labels=..., annotations=...)` | ❌ Not in v2 SDK | v2 supports labels/annotations only on `Trigger`s; task-level ones are dropped by the shim (logged) |
-| **Cache policies** | `Cache(policies=[...])` | ❌ Not in v2 SDK | v1 computes policy-based versions client-side; v2 `Cache` supports `version_override`/`serialize`/`ignored_inputs`/`salt` but not pluggable policies |
+| **Cache policies** | `Cache(policies=[...])` | ⚠️ No shim translation | v2 `Cache` does take `policies` (a `CachePolicy` protocol, default `FunctionBodyPolicy`), but v1 policies compute the version client-side, so the shim drops them (logged) and uses auto/override versioning |
 | **Workflow failure handling** | `failure_policy`, `on_failure` | ❌ Not in v2 SDK | v2 workflows are plain Python — use `try/except` around task calls |
 | **map_task partial success** | `min_successes`, `min_success_ratio` | ⚠️ Client-side | `flyte.map()` returns failures as exceptions (`return_exceptions=True`); the shim enforces the threshold and substitutes `None`, matching v1 semantics |
 | **Eager workflows** | `@eager` | ❌ No shim | v2 tasks are already async Python — call tasks with `await` directly; no translation implemented |
-| **Custom types** | Type system for domain objects | ✅ Supported | Use dataclasses, NamedTuple, or custom TypeTransformers |
-| **Implicit dependency inference** | DAG inferred from code | ✅ Full support | v2 workflows = pure Python; dependencies implicit |
 
 ### Node Timeout vs. Task Timeout
 
@@ -139,7 +140,9 @@ The `flyte-migrate` shim bridges v1 APIs to v2:
 
 ### Currently Supported
 
-✅ `@task` with v1 config (cache incl. `Cache` objects, retries, timeout, interruptible, resources, accelerators, shared_memory, secrets, env vars, docs, pod templates, plugins, enable_deck)
+✅ `@task` with v1 config (cache incl. `Cache` objects and the deprecated `cache_version` /
+`cache_serialize` / `cache_ignore_input_vars` args — an explicit version maps to v2
+`behavior="override"` — retries, timeout, interruptible, resources, accelerators, shared_memory, secrets, env vars, docs, pod templates, plugins, enable_deck)
 ✅ `@workflow` (converted to v2 task templates; `interruptible` forwarded; v1-only args logged and ignored instead of erroring)
 ✅ `@dynamic` (converted to v2 orchestrator tasks; same coverage as `@task`)
 ✅ `map_task` (concurrency forwarded; `min_successes`/`min_success_ratio` enforced client-side with v1 raise/None-fill semantics; `run_all_sub_nodes` inherent — v2 always runs all sub-tasks)
