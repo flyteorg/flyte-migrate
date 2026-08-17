@@ -307,12 +307,20 @@ The [`examples/`](examples/) directory contains runnable examples for every feat
 | [`image.py`](examples/image.py) | ImageSpec with packages, apt, env, commands |
 | [`v2_image.py`](examples/v2_image.py) | Mixing v1 and v2: a v1 task using a v2 `flyte.Image` |
 | [`pod_template_example.py`](examples/pod_template_example.py) | Pod customization with labels, annotations |
+| [`gate_example.py`](examples/gate_example.py) | Gate nodes: `sleep` and `approve` (pauses for a human) |
 | [`reference_task_example.py`](examples/reference_task_example.py) | Calling pre-registered remote tasks |
+| [`reference_workflow_example.py`](examples/reference_workflow_example.py) | Calling a pre-registered remote workflow |
+| [`reference_launch_plan_example.py`](examples/reference_launch_plan_example.py) | Calling a workflow by launch plan name |
 | [`datatypes_comprehensive.py`](examples/datatypes_comprehensive.py) | NamedTuple, dataclass, Enum, FlyteFile |
 | [`plugins/spark_example.py`](examples/plugins/spark_example.py) | Apache Spark jobs |
 | [`plugins/ray_example.py`](examples/plugins/ray_example.py) | Ray distributed computing |
 | [`plugins/pytorch_example.py`](examples/plugins/pytorch_example.py) | PyTorch distributed training |
 | [`plugins/dask_example.py`](examples/plugins/dask_example.py) | Dask parallel computing |
+
+> [!NOTE]
+> The three `reference_*` examples resolve a target that must already exist on the cluster.
+> Deploy [`reference_task_target.py`](examples/reference_task_target.py) first — running a
+> workflow does not register its tasks for reference lookup, only deploying does.
 
 ## Development
 
