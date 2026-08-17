@@ -358,6 +358,11 @@ def test_reference_workflow_example():
 
 
 @pytest.mark.plugins
+@pytest.mark.skip(
+    reason=(
+        "BigQuery example needs a secret google_application_credentials in the target project: "
+    ),
+)
 def test_bigquery():
     from examples.bigquery import no_io_wf
 
