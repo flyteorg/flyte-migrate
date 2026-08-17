@@ -179,7 +179,9 @@ See [`examples/v2_image.py`](examples/v2_image.py) for the full runnable version
 | `map_task()` | `flyte.map()` | Supported (incl. concurrency) |
 | `LaunchPlan` | `Trigger` (Cron / FixedRate) | Fully supported |
 | `Deck` | `flyte.report` | Fully supported |
-| `@reference_task` | `TaskDetails.get()` | Fully supported |
+| `@reference_task` / `@reference_workflow` / `@reference_launch_plan` | `TaskDetails.get()` | Fully supported |
+| `wait_for_input()` / `approve()` | `flyte.new_condition(...).wait()` | Supported (see gate node note) |
+| `sleep()` | `time.sleep` in the workflow driver | Fully supported |
 
 ### Task Parameters
 
@@ -187,7 +189,9 @@ All commonly used `@task` parameters are translated:
 
 | Parameter | Translation |
 |-----------|------------|
-| `cache` / `cache_version` | `cache="auto"` / `"disable"` |
+| `cache` | `cache="auto"` / `"disable"` |
+| `cache_version` (or `Cache(version=...)`) | `Cache(behavior="override", version_override=...)` |
+| `cache_serialize`, `cache_ignore_input_vars` | `Cache(serialize=...)` / `Cache(ignored_inputs=...)` |
 | `retries`, `timeout`, `interruptible` | Passed through directly |
 | `container_image` (str or `ImageSpec`) | Converted to `flyte.Image` |
 | `requests` / `limits` / `resources` | Merged into `flyte.Resources` |
@@ -281,7 +285,7 @@ Some v1 features have no v2 equivalent and are handled gracefully:
 |---------|----------|
 | `conda_packages` / `conda_channels` | Warning logged, ignored |
 | `builder="envd"` / `"noop"` | Warning logged, ignored |
-| `cache_version` | Accepted (no-op in v2) |
+| `wait_for_input` non-scalar `expected_type` | `TypeError` — v2 conditions carry `bool` / `int` / `float` / `str` only |
 | `execution_mode`, `task_resolver`, `pickle_untyped` | Logged, ignored |
 | `map_task` `min_successes` / `min_success_ratio` | Accepted but not forwarded (v2 doesn't support) |
 | `gpu` count without named accelerator | v2 requires device name (e.g. `"T4:1"`) |
