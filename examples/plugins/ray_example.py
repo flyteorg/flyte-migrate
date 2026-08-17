@@ -2,8 +2,8 @@ import logging
 import typing
 
 import ray
-from flytekit import task, workflow, ImageSpec, Resources
-from flytekitplugins.ray import RayJobConfig, WorkerNodeConfig, HeadNodeConfig
+from flytekit import ImageSpec, Resources, task, workflow
+from flytekitplugins.ray import HeadNodeConfig, RayJobConfig, WorkerNodeConfig
 
 custom_image = ImageSpec(python_version="3.10", packages=["flytekitplugins-ray", "kubernetes"], apt_packages=["wget"])
 
