@@ -287,7 +287,7 @@ Some v1 features have no v2 equivalent and are handled gracefully:
 | `builder="envd"` / `"noop"` | Warning logged, ignored |
 | `wait_for_input` non-scalar `expected_type` | `TypeError` — v2 conditions carry `bool` / `int` / `float` / `str` only |
 | `execution_mode`, `task_resolver`, `pickle_untyped` | Logged, ignored |
-| `map_task` `min_successes` / `min_success_ratio` | Accepted but not forwarded (v2 doesn't support) |
+| `map_task` `min_successes` / `min_success_ratio` | Enforced client-side — v2 has no native equivalent |
 | `gpu` count without named accelerator | v2 requires device name (e.g. `"T4:1"`) |
 | `docs.long_description` | Only `short_description` is mapped |
 | `flytekit.conditional()` | Use native Python `if/else` in workflows |
