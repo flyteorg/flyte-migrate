@@ -74,13 +74,16 @@ uv run pytest tests/test_image_comprehensive.py::test_name -v
 
 **Integration tests** ([`tests/integration/test_examples.py`](tests/integration/test_examples.py))
 run one example per test against a real v2 cluster. They're deselected by default
-(`addopts = -m 'not integration'`) and skipped without `FLYTE_API_KEY`, so they never slow down the
-normal run:
+(`addopts = -m 'not integration'`), so they never slow down the normal run. No `FLYTE_API_KEY`
+needed locally: without one, they use the standard flyte config discovery (`FLYTECTL_CONFIG`,
+`~/.flyte/config.yaml`, ...) and PKCE browser login — set the key only where a browser isn't
+available (e.g. CI):
 
 ```bash
-FLYTE_API_KEY=... uv run pytest tests/integration -v -s -m integration
-FLYTE_API_KEY=... uv run pytest tests/integration -v -s -m "integration and not plugins"
-FLYTE_API_KEY=... uv run pytest tests/integration -v -s -m integration -k hello
+uv run pytest tests/integration -v -s -m integration                     # local: config + PKCE
+FLYTE_API_KEY=... uv run pytest tests/integration -v -s -m integration   # CI: api key
+uv run pytest tests/integration -v -s -m "integration and not plugins"
+uv run pytest tests/integration -v -s -m integration -k hello
 ```
 
 The `plugins` marker covers examples needing cluster operators (Spark/Ray/Dask/PyTorch) or external

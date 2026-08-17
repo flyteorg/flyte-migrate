@@ -6,11 +6,10 @@ A ``flyte.Image`` passed as ``container_image`` is used as-is, without modificat
 it must include ``flytekit`` and ``flyte-migrate`` for the container to load this file.
 """
 
-import flyte_migrate  # noqa: F401, I001
 import flyte
 from flytekit import task, workflow
 
-image = flyte.Image.from_debian_base().with_pip_packages("flytekit", "flyte-migrate", "pandas")
+image = flyte.Image.from_debian_base().with_pip_packages("flytekit", "flyte-migrate", "pandas", "ty")
 
 
 @task(container_image=image, cache=True, retries=2)
