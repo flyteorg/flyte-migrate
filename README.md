@@ -15,22 +15,32 @@
 
 ## What is flyte-migrate?
 
-`flyte-migrate` is a **zero-effort compatibility layer** that lets your existing FlyteKit v1 workflows run on Flyte v2 infrastructure. No rewrites, no refactoring — just add one import and deploy.
+`flyte-migrate` is a **zero-effort compatibility layer** that lets your existing FlyteKit v1 workflows run on Flyte v2 infrastructure. No rewrites, no refactoring — **not a single line of code changes**.
 
-```diff
-+ import flyte_migrate
-  from flytekit import task, workflow
+Take your existing v1 file, untouched:
 
-  @task(cache=True, retries=3)
-  def greet(name: str) -> str:
-      return f"Hello, {name}!"
+```python
+from flytekit import task, workflow
 
-  @workflow
-  def hello_wf(name: str) -> str:
-      return greet(name=name)
+@task(cache=True, retries=3)
+def greet(name: str) -> str:
+    return f"Hello, {name}!"
+
+@workflow
+def hello_wf(name: str) -> str:
+    return greet(name=name)
 ```
 
-**That's it.** Your v1 workflow now runs on Flyte v2.
+And run it on Flyte v2 with `pyflyte-migrate` — a drop-in replacement for `pyflyte`:
+
+```bash
+pip install flyte-migrate
+
+pyflyte-migrate run --remote hello.py hello_wf --name=flyte
+```
+
+**That's it.** The shim is applied automatically before your file is loaded, so your v1 code
+runs on v2 unmodified.
 
 > [!NOTE]
 > `flyte-migrate` is a quick way to try Flyte v2 without changing any code, but it may hit
@@ -43,7 +53,7 @@
 
 | Challenge | Without flyte-migrate | With flyte-migrate |
 |-----------|----------------------|-------------------|
-| Migrating 100+ workflows | Rewrite every file | Add one import per file |
+| Migrating 100+ workflows | Rewrite every file | Run them as-is with `pyflyte-migrate` |
 | Testing on v2 infra | Full port required | Deploy existing code today |
 | Risk of regressions | High — new code, new bugs | Zero — same logic, same behavior |
 | Timeline | Weeks to months | Minutes |
@@ -56,16 +66,37 @@
 pip install flyte-migrate
 ```
 
-### Add one line to your v1 code
+### Run your v1 code with the CLI (no code changes)
 
-```python
-import flyte_migrate  # noqa: F401, I001  <-- add this as the first import
+Installing `flyte-migrate` also gives you `pyflyte-migrate`, which mirrors the `pyflyte` UX
+against a v2 cluster. The shim is applied automatically before your file is loaded, so your
+files need **no** `import flyte_migrate` line.
+
+Try it on the examples in this repo:
+
+```bash
+# Run locally (pyflyte semantics: local by default)
+pyflyte-migrate run examples/hello.py wf --name=flyte
+
+# Run on the v2 cluster
+pyflyte-migrate run --remote -p my-project -d development examples/hello.py wf --name=flyte
+
+# Register (deploy) workflows from files or directories
+pyflyte-migrate register -p my-project -d development examples/hello.py examples/launchplan.py
 ```
 
-### Run on Flyte v2
+Cluster connection uses the standard v2 config discovery (`./config.yaml`, `.flyte/config.yaml`,
+`~/.flyte/config.yaml`, ...), overridable with `-c /path/to/config.yaml` or a `FLYTE_API_KEY`
+environment variable. Each registered file gets its own per-module environment, so files that
+define same-named workflows don't collide.
+
+### Or drive it yourself with the v2 remote API
+
+If you'd rather call the Flyte v2 API from your own script and launch it with `python my_file.py`,
+add `import flyte_migrate` as the **first** import — nothing applies the shim for you in that case:
 
 ```python
-import flyte_migrate  # noqa: F401, I001
+import flyte_migrate  # noqa: F401, I001  <-- must be the first import
 import logging
 from flytekit import task, workflow, ImageSpec
 
@@ -87,29 +118,9 @@ if __name__ == "__main__":
     print(run.url)
 ```
 
-### Or use the CLI
-
-Installing `flyte-migrate` also gives you `pyflyte-migrate`, which mirrors the `pyflyte` UX
-against a v2 cluster. Files driven by the CLI don't need the `import flyte_migrate` line —
-the shim is applied automatically before your file is loaded.
-
-Try it on the examples in this repo:
-
 ```bash
-# Run locally (pyflyte semantics: local by default)
-pyflyte-migrate run examples/hello.py wf --name=flyte
-
-# Run on the v2 cluster
-pyflyte-migrate run --remote -p my-project -d development examples/hello.py wf --name=flyte
-
-# Register (deploy) workflows from files or directories
-pyflyte-migrate register -p my-project -d development examples/hello.py examples/launchplan.py
+python my_file.py
 ```
-
-Cluster connection uses the standard v2 config discovery (`./config.yaml`, `.flyte/config.yaml`,
-`~/.flyte/config.yaml`, ...), overridable with `-c /path/to/config.yaml` or a `FLYTE_API_KEY`
-environment variable. Each registered file gets its own per-module environment, so files that
-define same-named workflows don't collide.
 
 ## What Gets Translated
 
@@ -192,7 +203,7 @@ All v1 type patterns work transparently through the shim:
 │               Your v1 Code               │
 │     @task, @workflow, ImageSpec, ...     │
 └────────────────────┬─────────────────────┘
-                     │  import flyte_migrate
+                     │  pyflyte-migrate (or import flyte_migrate)
                      ▼
 ┌──────────────────────────────────────────┐
 │            flyte-migrate shim            │
@@ -276,7 +287,9 @@ uv run pytest tests/test_transform_utils.py -v
 ## FAQ
 
 **Do I need to change my v1 code?**
-No. Add `import flyte_migrate` as the first import — everything else stays the same.
+No. Run it with `pyflyte-migrate` and your files stay exactly as they are. The only case that
+needs an edit is driving the Flyte v2 remote API yourself (`python my_file.py`), where you add
+`import flyte_migrate` as the first import.
 
 **What if I use plugins like Spark or Ray?**
 They work. Plugin configs (spark_conf, worker nodes, etc.) are automatically translated to v2 equivalents. Plugin pip packages are also renamed automatically.
