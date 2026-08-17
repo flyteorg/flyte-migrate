@@ -57,6 +57,7 @@ runs on v2 unmodified.
 | Testing on v2 infra | Full port required | Deploy existing code today |
 | Risk of regressions | High — new code, new bugs | Zero — same logic, same behavior |
 | Timeline | Weeks to months | Minutes |
+| Adopting v2 features | All-or-nothing rewrite | Per-task — mix v1 and v2 in one file |
 
 ## Quick Start
 
@@ -121,6 +122,48 @@ if __name__ == "__main__":
 ```bash
 python my_file.py
 ```
+
+## Hybrid Mode: Mix v1 and v2 in the Same File
+
+You don't have to migrate all at once. v1 and v2 APIs coexist, so you can swap individual
+pieces over to the v2 SDK while the rest of the file stays v1.
+
+For example, use a v2 `flyte.Image` instead of a v1 `ImageSpec` to build the image for a v1
+task — no `ImageSpec` translation involved, the image is used exactly as you defined it:
+
+```python
+import flyte
+from flytekit import task, workflow
+
+# v2 image API, used by a v1 task
+image = flyte.Image.from_debian_base().with_pip_packages("flytekit", "flyte-migrate", "pandas")
+
+@task(container_image=image, cache=True, retries=2)   # still v1
+def summarize(name: str) -> str:
+    import pandas as pd
+
+    df = pd.DataFrame({"name": [name]})
+    return f"Hello, {df.at[0, 'name']}!"
+
+@workflow                                             # still v1
+def wf(name: str) -> str:
+    return summarize(name=name)
+```
+
+`container_image` accepts any of these, so migration is a per-task decision:
+
+| You pass | What happens |
+|----------|--------------|
+| `flyte.Image` (v2) | Used **as-is**, untouched — you control the whole image |
+| `ImageSpec` (v1) | Translated to a `flyte.Image`, with `flyte-migrate` added |
+| `str` (image ref) | Wrapped as an extendable base, with `flyte` + `flyte-migrate` added |
+| omitted | Default debian base with `flytekit` + `flyte-migrate` |
+
+> [!IMPORTANT]
+> A `flyte.Image` is used verbatim, so it must install `flytekit` **and** `flyte-migrate`
+> — otherwise the container can't load your v1 file.
+
+See [`examples/v2_image.py`](examples/v2_image.py) for the full runnable version.
 
 ## What Gets Translated
 
@@ -298,7 +341,7 @@ They work. Plugin configs (spark_conf, worker nodes, etc.) are automatically tra
 The translation happens once at import time. At runtime, your tasks execute directly on v2 infrastructure with no overhead.
 
 **Can I mix v1 and v2 code?**
-Yes. You can gradually introduce native v2 code while keeping v1 code working through flyte-migrate — see [`examples/v2_image.py`](examples/v2_image.py) for a v1 task whose image is built with the v2 `flyte.Image` API.
+Yes — see [Hybrid Mode](#hybrid-mode-mix-v1-and-v2-in-the-same-file). You can gradually introduce native v2 code while keeping v1 code working through flyte-migrate, e.g. a v1 `@task` whose image is built with the v2 `flyte.Image` API.
 
 **What Python versions are supported?**
 Python 3.10+.
