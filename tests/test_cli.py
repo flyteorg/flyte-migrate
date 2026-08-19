@@ -72,6 +72,21 @@ def test_help(runner):
     assert "register" in result.output
 
 
+def test_cli_counts_command_to_sentry(runner, monkeypatch, tmp_path):
+    counts = []
+    monkeypatch.setattr("flyte._sentry.count", lambda key, **kw: counts.append((key, kw)))
+    _write_wf(tmp_path, "countwf")
+
+    # The CLI skips the count under pytest, so every other test here stays off the metric.
+    assert runner.invoke(main, ["run", "countwf.py", "--help"]).exit_code == 0
+    assert counts == []
+
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
+    assert runner.invoke(main, ["run", "countwf.py", "--help"]).exit_code == 0
+    assert counts[0][0] == "flyte_migrate.cli.command"
+    assert counts[0][1]["tags"]["command"] == "run"
+
+
 def test_shim_active_on_import():
     # Importing flyte_migrate.cli (done at module top) must leave flytekit patched.
     assert flytekit.task is task_shim
