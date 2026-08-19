@@ -11,16 +11,9 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    # cli.py imports private flyte.cli internals; the CLI unit tests smoke-test compatibility in CI.
-    # 2.5.20 is also where flyte._sentry stopped reporting under pytest, which keeps CI runs of
-    # tests/test_cli.py out of the pyflyte-migrate invocation count.
     "flyte>=2.5.20",
     "flytekit",
     "flyteidl2",
-    # flyte only asks for sentry-sdk>=2.0, and `[tool.uv] prerelease = "allow"` below happily
-    # resolves that to a 3.0 alpha whose OpenTelemetry scope setup raises ValueError inside
-    # sentry_sdk.init(). flyte._sentry swallows that, so Sentry silently never initializes and
-    # the pyflyte-migrate usage counter is dropped on the floor. Stay on the 2.x line.
     "sentry-sdk<3",
 ]
 
