@@ -22,7 +22,6 @@ import functools
 import importlib
 import importlib.metadata
 import logging
-import os
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -336,15 +335,12 @@ def main(ctx: click.Context, endpoint: str | None, org: str | None, verbose: int
     import flyte.config as config
     from flyte._sentry import count
 
-    # Reuse the SDK's Sentry setup (DSN, dev-mode/opt-out filters, atexit flush) — it ships with
-    # the `flyte` dependency. Opt out with FLYTE_DISABLE_SENTRY=true.
-    # The pytest guard is ours: flyte's own only landed after our 2.5.18 floor, and without it
-    # every CI run of tests/test_cli.py would inflate the invocation count.
-    if not os.environ.get("PYTEST_CURRENT_TEST"):
-        count(
-            "flyte_migrate.cli.command",
-            tags={"command": ctx.invoked_subcommand or "none", "migrate_version": _VERSION},
-        )
+    # Reuse the SDK's Sentry setup — DSN, dev-mode/pytest/opt-out filters and the atexit flush all
+    # ship with the `flyte` dependency. Opt out with FLYTE_DISABLE_SENTRY=true.
+    count(
+        "flyte_migrate.cli.command",
+        tags={"command": ctx.invoked_subcommand or "none", "migrate_version": _VERSION},
+    )
 
     ctx.obj = common.CLIConfig(
         config=config.auto(config_file=config_file),

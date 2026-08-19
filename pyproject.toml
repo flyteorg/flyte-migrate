@@ -11,8 +11,10 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    # cli.py imports private flyte.cli internals; the CLI unit tests smoke-test compatibility in CI
-    "flyte>=2.5.18",
+    # cli.py imports private flyte.cli internals; the CLI unit tests smoke-test compatibility in CI.
+    # 2.5.20 is also where flyte._sentry stopped reporting under pytest, which keeps CI runs of
+    # tests/test_cli.py out of the pyflyte-migrate invocation count.
+    "flyte>=2.5.20",
     "flytekit",
     "flyteidl2",
 ]
