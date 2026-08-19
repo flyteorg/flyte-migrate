@@ -11,10 +11,10 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    # cli.py imports private flyte.cli internals; the CLI unit tests smoke-test compatibility in CI
-    "flyte>=2.5.18",
+    "flyte>=2.5.20",
     "flytekit",
     "flyteidl2",
+    "sentry-sdk<3",
 ]
 
 [project.scripts]

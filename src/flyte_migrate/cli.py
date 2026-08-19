@@ -333,6 +333,14 @@ def main(ctx: click.Context, endpoint: str | None, org: str | None, verbose: int
     the shim is applied automatically before your file is loaded.
     """
     import flyte.config as config
+    from flyte._sentry import count
+
+    # Reuse the SDK's Sentry setup — DSN, dev-mode/pytest/opt-out filters and the atexit flush all
+    # ship with the `flyte` dependency. Opt out with FLYTE_DISABLE_SENTRY=true.
+    count(
+        "flyte_migrate.cli.command",
+        tags={"command": ctx.invoked_subcommand or "none", "migrate_version": _VERSION},
+    )
 
     ctx.obj = common.CLIConfig(
         config=config.auto(config_file=config_file),
