@@ -17,6 +17,11 @@ dependencies = [
     "flyte>=2.5.20",
     "flytekit",
     "flyteidl2",
+    # flyte only asks for sentry-sdk>=2.0, and `[tool.uv] prerelease = "allow"` below happily
+    # resolves that to a 3.0 alpha whose OpenTelemetry scope setup raises ValueError inside
+    # sentry_sdk.init(). flyte._sentry swallows that, so Sentry silently never initializes and
+    # the pyflyte-migrate usage counter is dropped on the floor. Stay on the 2.x line.
+    "sentry-sdk<3",
 ]
 
 [project.scripts]
