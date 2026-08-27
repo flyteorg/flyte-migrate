@@ -11,6 +11,9 @@ well-formed, entirely fake values — no error, no warning. ``check_context`` th
 against that signature rather than just printing: on a cluster, a value of ``local`` means the
 bridge is broken, not that the cluster is odd.
 
+Two attributes have no v2 source at all — ``stats`` and ``execution_date`` — and log a warning
+once on first read instead of silently standing in. ``show_gaps`` exercises that path.
+
     pyflyte-migrate run examples/context_example.py wf --name=flyte
     pyflyte-migrate run --remote examples/context_example.py wf --name=flyte
 """
@@ -55,6 +58,44 @@ def check_context(name: str) -> Dict[str, str]:
         "task_id.version": str(task_id.version),
         "raw_output_prefix": str(raw_output_prefix),
     }
+
+
+@task
+def check_execution_id_is_shared(first: Dict[str, str], name: str) -> str:
+    """A second task in the same run must report the same execution_id.
+
+    This is the property v1 code actually relies on — the value is used as a run-level key for
+    correlation, dedup and idempotency. Mapping it to v2's ``ActionID.name`` (one invocation)
+    rather than ``run_name`` (the run) would hand each task a different id, and both are
+    perfectly valid strings, so nothing would look wrong.
+    """
+    ctx = current_context()
+
+    assert ctx.execution_id.name == first["execution_id.name"], (
+        f"execution_id differs between tasks: {ctx.execution_id.name!r} vs {first['execution_id.name']!r}"
+    )
+    # ...while task_id does not, since this is a different invocation.
+    assert ctx.task_id.name != first["task_id.name"], "task_id should differ between tasks"
+
+    return f"{name}: execution_id {ctx.execution_id.name} shared, task_id {ctx.task_id.name} distinct"
+
+
+@task
+def show_gaps() -> str:
+    """``stats`` and ``execution_date`` have no v2 equivalent; each warns once on first read.
+
+    They still return v1's local value rather than raising — v1 code usually only logs these,
+    and breaking an otherwise-working workflow over a log line is the worse trade. The warning
+    is what keeps the gap visible.
+    """
+    ctx = current_context()
+
+    ctx.stats.incr("flyte_migrate.example.counter")  # accepted, then discarded
+    execution_date = ctx.execution_date
+
+    # working_directory is deliberately left on v1's local path: its contract is "a local
+    # scratch dir for this task", which a local temp dir already satisfies.
+    return f"execution_date={execution_date.isoformat()} working_directory={ctx.working_directory}"
 
 
 @workflow
