@@ -300,6 +300,7 @@ The [`examples/`](examples/) directory contains runnable examples for every feat
 |---------|--------------|
 | [`hello.py`](examples/hello.py) | Basic task, workflow, dynamic, cache, retries |
 | [`conditional_wf.py`](examples/conditional_wf.py) | Branching with native Python if/else |
+| [`context_example.py`](examples/context_example.py) | `current_context()` reading v2 execution metadata |
 | [`map_task.py`](examples/map_task.py) | Mapped tasks with `functools.partial` |
 | [`launchplan.py`](examples/launchplan.py) | Cron and FixedRate schedules |
 | [`secret_example.py`](examples/secret_example.py) | ENV_VAR and FILE secret mounts |

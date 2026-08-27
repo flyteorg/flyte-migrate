@@ -138,6 +138,14 @@ def test_hello():
     _run_and_wait(wf, name="flyte")
 
 
+def test_context_example():
+    """Asserts inside the tasks: a value of ``local`` means the shim stopped bridging
+    ``current_context()`` to the v2 runtime, which otherwise fails silently."""
+    from examples.context_example import wf
+
+    _run_and_wait(wf, name="flyte")
+
+
 def test_conditional_wf():
     from examples.conditional_wf import conditional_wf
 
